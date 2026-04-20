@@ -73,6 +73,9 @@ echo "Docker OK."
 # --- 4. Extract data archives ---
 echo ""
 echo "[4/4] Extracting data archives..."
+if [ ! -f "$ARTIFACT_DIR/blockdb.tar.gz" ] && [ -d "$ARTIFACT_DIR/blockdb_parts" ]; then
+  cat "$ARTIFACT_DIR"/blockdb_parts/blockdb.tar.gz.part-* > "$ARTIFACT_DIR/blockdb.tar.gz"
+fi
 if [ -f "$ARTIFACT_DIR/blockdb.tar.gz" ] && [ ! -d "$ARTIFACT_DIR/blockdb" ]; then
   tar -xzf "$ARTIFACT_DIR/blockdb.tar.gz" -C "$ARTIFACT_DIR"
   echo "  blockdb/ extracted."
