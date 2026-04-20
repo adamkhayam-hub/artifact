@@ -83,6 +83,9 @@ if [ -f "$ARTIFACT_DIR/blockdb.tar.gz" ] && [ ! -d "$ARTIFACT_DIR/blockdb" ]; th
   tar -xzf "$ARTIFACT_DIR/blockdb.tar.gz" -C "$ARTIFACT_DIR"
   echo "  blockdb/ extracted."
 fi
+if [ ! -f "$ARTIFACT_DIR/pipeline/data.tar.gz" ] && [ -d "$ARTIFACT_DIR/pipeline/data_parts" ]; then
+  cat "$ARTIFACT_DIR"/pipeline/data_parts/data.tar.gz.part-* > "$ARTIFACT_DIR/pipeline/data.tar.gz"
+fi
 if [ -f "$ARTIFACT_DIR/pipeline/data.tar.gz" ] && [ ! -d "$ARTIFACT_DIR/pipeline/data" ]; then
   tar -xzf "$ARTIFACT_DIR/pipeline/data.tar.gz" -C "$ARTIFACT_DIR/pipeline"
   echo "  pipeline/data/ extracted."
