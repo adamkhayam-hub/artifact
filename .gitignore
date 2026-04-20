@@ -1,0 +1,21 @@
+pipeline/output/
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+rocq/.lia.cache
+rocq/.*.aux
+rocq/*.glob
+rocq/*.vo
+rocq/*.vok
+rocq/*.vos
+.vscode
+
+# Data dirs: shipped as top-level tarballs, extracted by install.sh
+blockdb/
+pipeline/data/
+
+# Large data (hosted externally)
+blockdb.tar.gz
+pipeline/data.tar.gz
+detect-api.tar.gz
