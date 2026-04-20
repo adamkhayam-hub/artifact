@@ -61,6 +61,9 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "ERROR: docker not found. Install Docker Desktop."
   exit 1
 fi
+if [ ! -f "$ARTIFACT_DIR/detect-api.tar.gz" ] && [ -d "$ARTIFACT_DIR/detect-api_parts" ]; then
+  cat "$ARTIFACT_DIR"/detect-api_parts/detect-api.tar.gz.part-* > "$ARTIFACT_DIR/detect-api.tar.gz"
+fi
 if ! docker image inspect detect-api >/dev/null 2>&1; then
   if [ -f "$ARTIFACT_DIR/detect-api.tar.gz" ]; then
     docker load -i "$ARTIFACT_DIR/detect-api.tar.gz"
