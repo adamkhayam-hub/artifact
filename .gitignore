@@ -15,7 +15,7 @@ rocq/*.vos
 blockdb/
 pipeline/data/
 
-# Large data (hosted externally)
+# Reassembled archives (built from blockdb_parts/ by install.sh)
 blockdb.tar.gz
 pipeline/data.tar.gz
 detect-api.tar.gz
