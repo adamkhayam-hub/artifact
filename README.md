@@ -700,6 +700,42 @@ found no cyclic structure (`"arbitrage": null`).
 
 ## Troubleshooting
 
+**`tar: Exiting with failure status` during install**
+
+If you downloaded the artifact as a ZIP from
+anonymous.4open.science, one of the `*_parts/`
+files may be corrupted during ZIP assembly
+(known flaky behaviour of that service).
+All non-final parts are exactly 99\,614\,720
+bytes (95 MB); any larger value indicates
+corruption.  Expected sizes per directory
+(bytes):
+
+```
+blockdb_parts/
+  blockdb.tar.gz.part-aa       99614720
+  blockdb.tar.gz.part-ab       99614720
+  blockdb.tar.gz.part-ac       99614720
+  blockdb.tar.gz.part-ad       81557049
+
+pipeline/data_parts/
+  data.tar.gz.part-aa .. part-ai   99614720 each
+  data.tar.gz.part-aj              43883946
+
+detect-api_parts_arm64/
+  detect-api.tar.gz.part-aa .. part-al   99614720 each
+  detect-api.tar.gz.part-am                3701096
+
+detect-api_parts_amd64/
+  detect-api.tar.gz.part-aa .. part-al   99614720 each
+  detect-api.tar.gz.part-am                 665429
+```
+
+Re-download the corrupted file individually
+from the 4open.science web UI (raw single-file
+downloads are not affected by the ZIP bug),
+overwrite the bad copy, and re-run `./install.sh`.
+
 **`./install.sh: permission denied`**
 ```bash
 chmod +x install.sh && ./install.sh
