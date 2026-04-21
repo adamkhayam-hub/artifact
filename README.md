@@ -723,13 +723,13 @@ python3 -m pip install -r requirements.txt
 
 **Docker image architecture mismatch / slow execution**
 
-The shipped image is `linux/arm64`. On `linux/amd64` hosts,
-Docker Desktop transparently emulates via QEMU (default on
-macOS and Windows; on Linux install `qemu-user-static`).
-Expect ~10x slower execution under emulation. Verify with
-`docker inspect detect-api | grep Architecture`; if you see
-a platform warning on `docker run`, it is a warning, not a
-failure, and the image will still produce correct results.
+Both `linux/arm64` and `linux/amd64` images are shipped;
+`install.sh` loads the native one based on `uname -m`.
+If only one arch is available for your host, Docker Desktop
+transparently emulates via QEMU (default on macOS and
+Windows; on Linux install `qemu-user-static`). Expect ~10x
+slower execution under emulation. Verify with
+`docker inspect detect-api | grep Architecture`.
 
 **`docker: permission denied`** (Linux)
 ```bash
