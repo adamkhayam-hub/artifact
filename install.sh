@@ -69,14 +69,33 @@ if ! command -v docker >/dev/null 2>&1; then
   echo "ERROR: docker not found. Install Docker Desktop."
   exit 1
 fi
-if [ ! -f "$ARTIFACT_DIR/detect-api.tar.gz" ] && [ -d "$ARTIFACT_DIR/detect-api_parts" ]; then
-  cat "$ARTIFACT_DIR"/detect-api_parts/detect-api.tar.gz.part-* > "$ARTIFACT_DIR/detect-api.tar.gz"
+HOST_ARCH="$(uname -m)"
+case "$HOST_ARCH" in
+  arm64|aarch64) PREFERRED="arm64" ;;
+  x86_64|amd64)  PREFERRED="amd64" ;;
+  *)             PREFERRED="arm64" ;;
+esac
+PARTS_DIR=""
+if [ -d "$ARTIFACT_DIR/detect-api_parts_$PREFERRED" ]; then
+  PARTS_DIR="detect-api_parts_$PREFERRED"
+elif [ -d "$ARTIFACT_DIR/detect-api_parts_arm64" ]; then
+  PARTS_DIR="detect-api_parts_arm64"
+  echo "  Native $PREFERRED image not shipped; using arm64 (will run under emulation)."
+elif [ -d "$ARTIFACT_DIR/detect-api_parts_amd64" ]; then
+  PARTS_DIR="detect-api_parts_amd64"
+  echo "  Native $PREFERRED image not shipped; using amd64 (will run under emulation)."
+fi
+if [ -n "$PARTS_DIR" ] && [ ! -f "$ARTIFACT_DIR/detect-api.tar.gz" ]; then
+  cat "$ARTIFACT_DIR/$PARTS_DIR"/detect-api.tar.gz.part-* > "$ARTIFACT_DIR/detect-api.tar.gz"
 fi
 if ! docker image inspect detect-api >/dev/null 2>&1; then
   if [ -f "$ARTIFACT_DIR/detect-api.tar.gz" ]; then
-    docker load -i "$ARTIFACT_DIR/detect-api.tar.gz"
+    LOADED_TAG=$(docker load -i "$ARTIFACT_DIR/detect-api.tar.gz" | awk -F': ' '/Loaded image/ {print $2}' | head -1)
+    if [ -n "$LOADED_TAG" ] && [ "$LOADED_TAG" != "detect-api:latest" ] && [ "$LOADED_TAG" != "detect-api" ]; then
+      docker tag "$LOADED_TAG" detect-api
+    fi
   else
-    echo "WARNING: detect-api.tar.gz not found. Some pipeline steps will be skipped."
+    echo "WARNING: no detect-api parts directory found. Some pipeline steps will be skipped."
   fi
 fi
 echo "Docker OK."
