@@ -1,6 +1,7 @@
 pipeline/output/
 .DS_Store
 .venv/
+.opam/
 __pycache__/
 *.pyc
 rocq/.lia.cache

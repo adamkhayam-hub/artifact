@@ -42,15 +42,29 @@ Three commands to reproduce every claim in the paper:
 
 ```bash
 # 1. Install artifact dependencies (~5 min, one-time)
-#    Installs numpy/matplotlib/pandas, Rocq, and loads detect-api
+#    Reassembles parts, loads detect-api, installs Python + Rocq
 cd artifact && ./install.sh
 
 # 2. Verify the 5 theorems (< 1 min)
-cd rocq && opam exec -- rocq compile Arbitrage.v
+#    Uses the sandboxed opam root at artifact/.opam
+cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=argos -- rocq compile Arbitrage.v
 
 # 3. Reproduce the evaluation (5-30 min offline, hours online)
 cd ../pipeline && python3 script/run_all.py --offline --from 0
 ```
+
+To reset everything and start over: `./cleanup.sh`.
+
+## Artifact layout (FYI)
+
+The large payloads (Docker image, pre-exported traces, evaluation
+CSVs) are shipped as <95 MB split parts so the repository fits within
+standard git hosting limits. `install.sh` reassembles them; you do not
+need to do anything manually.
+
+- `detect-api_parts/` → `detect-api.tar.gz` (Docker image, kept for re-loads)
+- `blockdb_parts/` → `blockdb.tar.gz` (pre-exported traces, deleted after extraction)
+- `pipeline/data_parts/` → `pipeline/data.tar.gz` (CSVs, deleted after extraction)
 
 ### Sanity check after install
 
@@ -318,16 +332,20 @@ and the conclusions are identical.
 
 ## 3. Detection Tool (Docker)
 
-**Location:** `detect-api.tar.gz`
+**Location:** `detect-api_parts/` (reassembled into `detect-api.tar.gz`
+and loaded by `install.sh`).
 
 A Docker image containing five compiled binaries for
 arbitrage detection. No source code, no build tools,
 no API keys. The image includes a Postgres instance
 with 2.6M event signatures for trace decoding.
 
-### Load the image
+### Load the image (manual)
+
+`install.sh` does this for you. To reload manually:
 
 ```bash
+cat detect-api_parts/detect-api.tar.gz.part-* > detect-api.tar.gz
 docker load -i detect-api.tar.gz
 ```
 
@@ -476,7 +494,7 @@ Supported chains (set WETH\_ADDRESS accordingly):
 
 ## 4. Pre-exported Traces
 
-**Location:** `blockdb/`
+**Location:** `blockdb_parts/` (extracted to `blockdb/` by `install.sh`).
 
 Raw execution traces and fee metadata for offline
 verification. Two block ranges are provided:

@@ -39,13 +39,21 @@ fi
 "$VENV/bin/pip" install --quiet -r "$ARTIFACT_DIR/requirements.txt"
 echo "Python OK (venv at $VENV)."
 
-# --- 2. Rocq ---
+# --- 2. Rocq (sandboxed in $ARTIFACT_DIR/.opam) ---
 echo ""
-echo "[2/4] Installing Rocq..."
+echo "[2/4] Installing Rocq into a local opam root..."
 if ! command -v opam >/dev/null 2>&1; then
   echo "ERROR: opam not found. Install from https://opam.ocaml.org/"
   exit 1
 fi
+export OPAMROOT="$ARTIFACT_DIR/.opam"
+if [ ! -d "$OPAMROOT" ]; then
+  opam init --bare --no-setup --disable-sandboxing -y
+fi
+if ! opam switch list --short 2>/dev/null | grep -q '^argos$'; then
+  opam switch create argos ocaml-base-compiler.5.3.0 --no-switch -y
+fi
+eval "$(opam env --switch=argos --set-switch)"
 if ! opam list --installed 2>/dev/null | grep -q "^rocq-core "; then
   opam install -y rocq-core
 fi
@@ -100,11 +108,16 @@ echo "  Installation complete."
 echo ""
 echo "  Next steps:"
 echo "    1. Activate venv:  source .venv/bin/activate"
-echo "    2. Compile Rocq:   cd rocq && opam exec -- rocq compile Arbitrage.v"
+echo "    2. Compile Rocq:   cd rocq && \\"
+echo "                       OPAMROOT=\"$ARTIFACT_DIR/.opam\" \\"
+echo "                       opam exec --switch=argos -- rocq compile Arbitrage.v"
 echo "    3. Run pipeline (offline, bundled data):"
 echo "         cd pipeline && python3 script/run_all.py --offline --from 0"
 echo ""
 echo "    To reproduce the paper from scratch (online mode):"
 echo "         cd pipeline && python3 script/run_all.py \\"
 echo "             --online --config /path/to/ethereum/config.json --from 0"
+echo ""
+echo "  To reset the artifact (remove venv, extracted data, Docker image):"
+echo "    ./cleanup.sh"
 echo "============================================"

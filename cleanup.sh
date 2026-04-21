@@ -20,6 +20,9 @@ echo "============================================"
 rm -rf "$ARTIFACT_DIR/.venv"
 echo "  .venv removed."
 
+rm -rf "$ARTIFACT_DIR/.opam"
+echo "  .opam (local opam root with Rocq) removed."
+
 rm -rf "$ARTIFACT_DIR/blockdb"
 rm -f  "$ARTIFACT_DIR/blockdb.tar.gz"
 echo "  blockdb/ and blockdb.tar.gz removed."
