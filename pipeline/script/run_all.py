@@ -53,7 +53,7 @@ STEPS = [
     # --- 01: Statistics (reads compact CSV) ---
     (1,  "01_statistics/explore.py",              "Statistics: exploration + fixpoint coverage",
      [SUMMARIES / "01_statistics" / "explore.txt"]),
-    (2,  "01_statistics/accuracy.py",             "Statistics: accuracy (Argos vs Eigenphi)",
+    (2,  "01_statistics/accuracy.py",             "Statistics: accuracy (Ours vs Eigenphi)",
      [SUMMARIES / "01_statistics" / "accuracy.txt"]),
     (3,  "01_statistics/topology.py",             "Statistics: topology",
      [SUMMARIES / "01_statistics" / "topology.txt"]),

@@ -48,7 +48,7 @@ def main():
     out += section("1. SCALE")
     out += extract(
         SUMMARIES_DIR / "01_statistics/explore.txt",
-        "Argos:", "Eigenphi:", "Total Argos",
+        "Ours:", "Eigenphi:", "Total Ours",
     )
 
     # --- Fixpoint coverage ---
@@ -66,21 +66,21 @@ def main():
         "probable", "uncertain",
     )
 
-    # --- Accuracy (Argos vs Eigenphi) ---
-    out += section("4. ACCURACY (Argos vs Eigenphi)")
+    # --- Accuracy (Ours vs Eigenphi) ---
+    out += section("4. ACCURACY (Ours vs Eigenphi)")
     out += extract(
         SUMMARIES_DIR / "01_statistics/accuracy.txt",
         "Precision", "Recall", "F1", "TP:", "FP:", "FN:",
-        "Eigenphi-only", "Argos-only", "confirmed_arbitrage",
+        "Eigenphi-only", "Ours-only", "confirmed_arbitrage",
     )
 
     # --- Three-way comparison ---
-    out += section("5. THREE-WAY (Argos vs Eigenphi vs ArbiNet)")
+    out += section("5. THREE-WAY (Ours vs Eigenphi vs ArbiNet)")
     out += extract(
         SUMMARIES_DIR / "05_arbinet/comparison.txt",
-        "Argos detection", "Eigenphi label", "ArbiNet positive",
-        "All three", "Argos-only", "ArbiNet miss",
-        "Eigenphi-only", "Argos + Eigenphi", "Argos + ArbiNet",
+        "Ours detection", "Eigenphi label", "ArbiNet positive",
+        "All three", "Ours-only", "ArbiNet miss",
+        "Eigenphi-only", "Ours + Eigenphi", "Ours + ArbiNet",
     )
 
     # --- Topology ---
@@ -138,7 +138,7 @@ def main():
     out += section("12. ARBINET DEGRADATION")
     out += extract(
         SUMMARIES_DIR / "05_arbinet/degradation.txt",
-        "Window", "Argos", "ArbiNet", "Eigenphi", "Total",
+        "Window", "Ours", "ArbiNet", "Eigenphi", "Total",
     )
 
     # --- Key numbers for paper ---
@@ -151,7 +151,7 @@ def main():
     s27 = (SUMMARIES_DIR / "04_cat4/to_gap.txt").read_text()
 
     for line in s01.splitlines():
-        if "Total Argos" in line:
+        if "Total Ours" in line:
             out.append(f"  Total detections: {line.split(':')[1].strip()}")
         if "Fixpoint alone" in line:
             out.append(f"  Fixpoint: {line.strip()}")

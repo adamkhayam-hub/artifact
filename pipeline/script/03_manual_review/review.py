@@ -203,7 +203,7 @@ def review_transaction(parsed, labels):
     review.append(f"TRANSACTION: {tx}")
     review.append(f"BLOCK: {parsed['block']}")
     review.append(f"{'=' * 70}")
-    review.append(f"Argos verdict: {parsed['verdict']}")
+    review.append(f"Ours verdict: {parsed['verdict']}")
     review.append(f"Reasons: {parsed['reasons']}")
     review.append(f"Eigenphi: {'YES' if parsed['eigenphi_main'] else 'NO'}")
     review.append("")
@@ -430,7 +430,7 @@ def main():
         for txt_file in sorted(folder_path.glob("tx_*.txt")):
             parsed = parse_inspect(txt_file)
 
-            if "NOT IN ARGOS" in parsed["raw"] or "ERROR" in parsed["raw"]:
+            if "NOT IN OURS" in parsed["raw"] or "ERROR" in parsed["raw"]:
                 continue
 
             verdict, has_lending, review_text = review_transaction(parsed, labels)

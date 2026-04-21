@@ -1,14 +1,13 @@
 """
-18_arbinet_comparison.py — Three-way comparison: Argos vs ArbiNet vs Eigenphi.
+18_arbinet_comparison.py — Three-way comparison: Ours vs ArbiNet vs Eigenphi.
 
 Setup:
-    1. Clone ArbiNet fork: git clone https://gitlab.com/functori/system/arbinet-fork
-    2. Set ARBINET_DIR below to the clone path
-    3. Run ArbiNet inference on the selected blocks (see run_arbinet.sh)
-    4. Place ArbiNet results in data/arbinet_results.csv
+    ArbiNet predictions for the comparison block range are shipped in
+    `data/arbinet/` (pre-computed). No separate setup is needed to run
+    this script in offline mode.
 
 Reads:
-    data/system_compact.csv       (Argos verdicts, from 00_preprocess.py)
+    data/system_compact.csv       (Ours verdicts, from 00_preprocess.py)
     data/eigenphi_arbis_txs.csv  (Eigenphi labels)
     data/arbinet_results.csv     (ArbiNet predictions)
 
@@ -74,7 +73,7 @@ def p(msg="", f=None):
 
 
 def load_system_in_range():
-    """Load Argos verdicts for the comparison block range.
+    """Load Ours verdicts for the comparison block range.
 
     Uses the dedicated 3-way CSV (bench format) if available,
     otherwise falls back to the main compact CSV.
@@ -145,7 +144,7 @@ def load_arbinet():
 
 def main():
     # Load data
-    print("Loading Argos verdicts...")
+    print("Loading Ours verdicts...")
     system = load_system_in_range()
     print(f"  {len(system)} transactions in range")
 
@@ -166,14 +165,14 @@ def main():
             in_range_hashes.add(h)
 
     # Build 8-cell table
-    #   Argos+/- x Eigenphi+/- x ArbiNet+/-
+    #   Ours+/- x Eigenphi+/- x ArbiNet+/-
     cells = Counter()
     for h in in_range_hashes:
-        a = h in system  # Argos flagged (arbitrage or warning)
+        a = h in system  # Ours flagged (arbitrage or warning)
         e = h in eigenphi  # Eigenphi flagged
         n = arbinet.get(h, False)  # ArbiNet predicted arbitrage
 
-        # Finer: Argos confirmed vs warning
+        # Finer: Ours confirmed vs warning
         a_confirmed = system.get(h) == "arbitrage"
         a_warning = system.get(h) == "warning"
 
@@ -186,7 +185,7 @@ def main():
 
     with open(OUT_TXT, "w") as out:
         p("=" * 70, out)
-        p("THREE-WAY COMPARISON: Argos vs ArbiNet vs Eigenphi", out)
+        p("THREE-WAY COMPARISON: Ours vs ArbiNet vs Eigenphi", out)
         p("=" * 70, out)
         p(f"Block range: {COMPARISON_FIRST} - {COMPARISON_LAST} "
           f"({COMPARISON_LAST - COMPARISON_FIRST + 1} blocks)", out)
@@ -198,7 +197,7 @@ def main():
         eigenphi_pos = len(eigenphi & in_range_hashes)
         arbinet_pos = sum(1 for h in in_range_hashes if arbinet.get(h, False))
 
-        p(f"Argos detections:   {system_pos}", out)
+        p(f"Ours detections:   {system_pos}", out)
         p(f"Eigenphi labels:    {eigenphi_pos}", out)
         p(f"ArbiNet positives:  {arbinet_pos}", out)
         p("", out)
@@ -207,7 +206,7 @@ def main():
         p("-" * 70, out)
         p("8-CELL COMPARISON TABLE", out)
         p("-" * 70, out)
-        p(f"{'Argos':>8} {'Eigenphi':>10} {'ArbiNet':>10} {'Count':>8} "
+        p(f"{'Ours':>8} {'Eigenphi':>10} {'ArbiNet':>10} {'Count':>8} "
           f"{'%':>7}", out)
         p("-" * 50, out)
 
@@ -240,19 +239,19 @@ def main():
         eigenphi_arbinet_not_system = cells.get(("A-", "E+", "N+"), 0)
 
         p(f"  All three agree (A+ E+ N+):           {all_agree}", out)
-        p(f"  Argos + Eigenphi, ArbiNet misses:      "
+        p(f"  Ours + Eigenphi, ArbiNet misses:      "
           f"{system_eigenphi_not_arbinet}", out)
-        p(f"  Eigenphi + ArbiNet, Argos misses:      "
+        p(f"  Eigenphi + ArbiNet, Ours misses:      "
           f"{eigenphi_arbinet_not_system}", out)
-        p(f"  Argos-only (not Eigenphi, not ArbiNet): "
+        p(f"  Ours-only (not Eigenphi, not ArbiNet): "
           f"{cells.get(('A+', 'E-', 'N-'), 0)}", out)
-        p(f"  Eigenphi-only (not Argos, not ArbiNet): "
+        p(f"  Eigenphi-only (not Ours, not ArbiNet): "
           f"{cells.get(('A-', 'E+', 'N-'), 0)}", out)
         p("", out)
 
-        # Argos-exclusive breakdown by verdict tier
+        # Ours-exclusive breakdown by verdict tier
         p("-" * 70, out)
-        p("ARGOS-EXCLUSIVE BREAKDOWN", out)
+        p("OURS-EXCLUSIVE BREAKDOWN", out)
         p("-" * 70, out)
         exclusive_confirmed = 0
         exclusive_attempted = 0
@@ -320,9 +319,9 @@ def main():
         en_agree = sum(cells.get(k, 0)
                        for k in cells if k[1][1] == k[2][1])
 
-        p(f"  Argos-Eigenphi agree: {ae_agree}/{total} "
+        p(f"  Ours-Eigenphi agree: {ae_agree}/{total} "
           f"({ae_agree/total*100:.1f}%)", out)
-        p(f"  Argos-ArbiNet agree:  {an_agree}/{total} "
+        p(f"  Ours-ArbiNet agree:  {an_agree}/{total} "
           f"({an_agree/total*100:.1f}%)", out)
         p(f"  Eigenphi-ArbiNet:     {en_agree}/{total} "
           f"({en_agree/total*100:.1f}%)", out)
@@ -338,7 +337,7 @@ def main():
           "(Nov 2025-Mar 2026).", out)
         p("  Temporal gap: ~3 years. New protocols (V4, etc.) "
           "not in training data.", out)
-        p("  Argos requires no retraining: structural rules are "
+        p("  Ours requires no retraining: structural rules are "
           "protocol-agnostic.", out)
 
     print(f"\nSummary written to {OUT_TXT}")
@@ -351,10 +350,10 @@ def main():
 
         categories = [
             "All three",
-            "Argos+Eigenphi\nonly",
-            "Argos+ArbiNet\nonly",
+            "Ours+Eigenphi\nonly",
+            "Ours+ArbiNet\nonly",
             "Eigenphi+ArbiNet\nonly",
-            "Argos only",
+            "Ours only",
             "Eigenphi only",
             "ArbiNet only",
         ]

@@ -35,7 +35,7 @@ FIGURES_DIR = EVAL_DIR / "output" / "figures"
 SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
 FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
-ARGOS_CSV = DATA_DIR / "system_arbis.csv"
+OURS_CSV = DATA_DIR / "system_arbis.csv"
 OUT_TXT = SUMMARIES_DIR / "01_statistics/bots.txt"
 OUT_FIG = FIGURES_DIR / "fig_bot_concentration.pdf"
 
@@ -58,8 +58,8 @@ def normalize_hash(h):
 
 
 def main():
-    if not ARGOS_CSV.exists():
-        print(f"ERROR: {ARGOS_CSV} not found.")
+    if not OURS_CSV.exists():
+        print(f"ERROR: {OURS_CSV} not found.")
         sys.exit(1)
 
     print("Reading sender addresses from full CSV (this takes a few minutes)...")
@@ -67,7 +67,7 @@ def main():
     sender_verdicts = Counter()
     total = 0
 
-    with open(ARGOS_CSV) as f:
+    with open(OURS_CSV) as f:
         reader = csv.reader(f)
         for row in reader:
             total += 1

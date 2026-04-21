@@ -63,8 +63,8 @@ def reason_transaction(filepath, addr_labels):
     lines = content.split("\n")
 
     # Skip unparseable files
-    if "NOT IN ARGOS" in content:
-        return None, "NOT_IN_ARGOS", "Transaction not found in Argos dataset."
+    if "NOT IN OURS" in content:
+        return None, "NOT_IN_OURS", "Transaction not found in Ours dataset."
     if "ERROR parsing" in content:
         return None, "PARSE_ERROR", "JSON parsing error (likely newer integer encoding)."
 
@@ -209,7 +209,7 @@ def reason_transaction(filepath, addr_labels):
     # Build the reasoning
     reasoning = []
     reasoning.append(f"Transaction: {tx_hash}")
-    reasoning.append(f"Argos verdict: {verdict} ({reasons_str})")
+    reasoning.append(f"Ours verdict: {verdict} ({reasons_str})")
     reasoning.append(f"Eigenphi: {'YES' if eigenphi_main else 'NO'}")
     reasoning.append(f"Cycles: {n_cycles}, Transfers in cycles: {len(cycle_transfers)}")
     reasoning.append("")

@@ -49,7 +49,7 @@ def main():
     system_min = min(all_blocks)
     system_max = max(all_blocks)
     system_count = len(rows)
-    p(f"Argos:            {system_min:>10,} - {system_max:>10,}  ({system_count:,} txs)")
+    p(f"Ours:            {system_min:>10,} - {system_max:>10,}  ({system_count:,} txs)")
 
     eig_min, eig_max, eig_count = read_block_range(
         EIGENPHI_FILTERED, block_col=0
@@ -59,7 +59,7 @@ def main():
     overlap_min = max(system_min, eig_min)
     overlap_max = min(system_max, eig_max)
     p(f"\nOverlap range:    {overlap_min:>10,} - {overlap_max:>10,}")
-    p(f"Argos blocks beyond Eigenphi: {system_max - eig_max}")
+    p(f"Ours blocks beyond Eigenphi: {system_max - eig_max}")
 
     # Eigenphi CSVs: col 0 = block_number, col 1 = tx_hash
     eig_in_range = 0
@@ -73,7 +73,7 @@ def main():
     p(f"Eigenphi txs in overlap: {eig_in_range:,}")
 
     p("\n" + "=" * 60)
-    p("ARGOS VERDICT DISTRIBUTION (normalized)")
+    p("OURS VERDICT DISTRIBUTION (normalized)")
     p("=" * 60)
 
     verdicts = Counter()
@@ -103,7 +103,7 @@ def main():
             # for transfersInLeftoversCycles (lending-related structures)
             has_leftover_cycles[verdict] += 1
 
-    p(f"Total Argos results: {total:,}")
+    p(f"Total Ours results: {total:,}")
     p()
 
     for verdict, count in verdicts.most_common():
@@ -182,10 +182,10 @@ def main():
     both = system_hashes & eig_hashes_in_range
     system_only = system_hashes - eig_hashes_in_range
     eig_only = eig_hashes_in_range - system_hashes
-    p(f"Argos total (unique hashes): {len(system_hashes):,}")
+    p(f"Ours total (unique hashes): {len(system_hashes):,}")
     p(f"Eigenphi in range (unique):  {len(eig_hashes_in_range):,}")
     p(f"Both (TP candidates):        {len(both):,}")
-    p(f"Argos only (FP candidates):  {len(system_only):,}")
+    p(f"Ours only (FP candidates):  {len(system_only):,}")
     p(f"Eigenphi only (FN cand.):    {len(eig_only):,}")
 
     output_path = SUMMARIES_DIR / "01_statistics/explore.txt"

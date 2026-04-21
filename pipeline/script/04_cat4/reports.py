@@ -269,7 +269,7 @@ def generate_report(tx_hash, tx_dir, raw_arb_json):
 
     # --- Verdict ---
     w("## Verdict")
-    w(f"- **Argos**: {verdict} ({', '.join(reasons)})")
+    w(f"- **Ours**: {verdict} ({', '.join(reasons)})")
 
     # Decision tree classification
     if has_arb and verdict in ("arbitrage", "warning"):
