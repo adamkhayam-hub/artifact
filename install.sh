@@ -50,10 +50,10 @@ export OPAMROOT="$ARTIFACT_DIR/.opam"
 if [ ! -d "$OPAMROOT" ]; then
   opam init --bare --no-setup --disable-sandboxing -y
 fi
-if ! opam switch list --short 2>/dev/null | grep -q '^argos$'; then
-  opam switch create argos ocaml-base-compiler.5.3.0 --no-switch -y
+if ! opam switch list --short 2>/dev/null | grep -q '^rocq$'; then
+  opam switch create rocq ocaml-base-compiler.5.3.0 --no-switch -y
 fi
-eval "$(opam env --switch=argos --set-switch)"
+eval "$(opam env --switch=rocq --set-switch)"
 if ! opam list --installed 2>/dev/null | grep -q "^rocq-core "; then
   opam install -y rocq-core
 fi
@@ -110,7 +110,7 @@ echo "  Next steps:"
 echo "    1. Activate venv:  source .venv/bin/activate"
 echo "    2. Compile Rocq:   cd rocq && \\"
 echo "                       OPAMROOT=\"$ARTIFACT_DIR/.opam\" \\"
-echo "                       opam exec --switch=argos -- rocq compile Arbitrage.v"
+echo "                       opam exec --switch=rocq -- rocq compile Arbitrage.v"
 echo "    3. Run pipeline (offline, bundled data):"
 echo "         cd pipeline && python3 script/run_all.py --offline --from 0"
 echo ""

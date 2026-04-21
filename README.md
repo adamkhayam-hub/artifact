@@ -47,7 +47,7 @@ cd artifact && ./install.sh
 
 # 2. Verify the 5 theorems (< 1 min)
 #    Uses the sandboxed opam root at artifact/.opam
-cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=argos -- rocq compile Arbitrage.v
+cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=rocq -- rocq compile Arbitrage.v
 
 # 3. Reproduce the evaluation (5-30 min offline, hours online)
 cd ../pipeline && python3 script/run_all.py --offline --from 0
