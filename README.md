@@ -45,8 +45,7 @@ Three commands to reproduce every claim in the paper:
 #    Reassembles parts, loads detect-api, installs Python + Rocq
 cd artifact && ./install.sh
 
-# 2. Verify the 5 theorems (< 1 min)
-#    Uses the sandboxed opam root at artifact/.opam
+# 2. Verify the 5 theorems (< 1 min) — single line, no continuation
 cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=rocq -- rocq compile Arbitrage.v
 
 # 3. Reproduce the evaluation (5-30 min offline, hours online)
