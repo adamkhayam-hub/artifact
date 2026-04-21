@@ -62,7 +62,9 @@ CSVs) are shipped as <95 MB split parts so the repository fits within
 standard git hosting limits. `install.sh` reassembles them; you do not
 need to do anything manually.
 
-- `detect-api_parts/` → `detect-api.tar.gz` (Docker image, kept for re-loads)
+- `detect-api_parts_arm64/`, `detect-api_parts_amd64/` → `detect-api.tar.gz`
+  (Docker image; `install.sh` picks the one matching the host architecture
+  and falls back to the other under emulation if the match isn't shipped)
 - `blockdb_parts/` → `blockdb.tar.gz` (pre-exported traces, deleted after extraction)
 - `pipeline/data_parts/` → `pipeline/data.tar.gz` (CSVs, deleted after extraction)
 
@@ -332,8 +334,9 @@ and the conclusions are identical.
 
 ## 3. Detection Tool (Docker)
 
-**Location:** `detect-api_parts/` (reassembled into `detect-api.tar.gz`
-and loaded by `install.sh`).
+**Location:** `detect-api_parts_arm64/` and/or `detect-api_parts_amd64/`
+(reassembled into `detect-api.tar.gz` and loaded by `install.sh`, which
+auto-selects based on `uname -m`).
 
 A Docker image containing five compiled binaries for
 arbitrage detection. No source code, no build tools,
@@ -345,7 +348,8 @@ with 2.6M event signatures for trace decoding.
 `install.sh` does this for you. To reload manually:
 
 ```bash
-cat detect-api_parts/detect-api.tar.gz.part-* > detect-api.tar.gz
+# Pick the directory matching your host (arm64 or amd64):
+cat detect-api_parts_arm64/detect-api.tar.gz.part-* > detect-api.tar.gz
 docker load -i detect-api.tar.gz
 ```
 
@@ -716,6 +720,16 @@ running. Reinstall with the same interpreter:
 ```bash
 python3 -m pip install -r requirements.txt
 ```
+
+**Docker image architecture mismatch / slow execution**
+
+The shipped image is `linux/arm64`. On `linux/amd64` hosts,
+Docker Desktop transparently emulates via QEMU (default on
+macOS and Windows; on Linux install `qemu-user-static`).
+Expect ~10x slower execution under emulation. Verify with
+`docker inspect detect-api | grep Architecture`; if you see
+a platform warning on `docker run`, it is a warning, not a
+failure, and the image will still produce correct results.
 
 **`docker: permission denied`** (Linux)
 ```bash
