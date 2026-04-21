@@ -81,6 +81,7 @@ if [ ! -f "$ARTIFACT_DIR/blockdb.tar.gz" ] && [ -d "$ARTIFACT_DIR/blockdb_parts"
 fi
 if [ -f "$ARTIFACT_DIR/blockdb.tar.gz" ] && [ ! -d "$ARTIFACT_DIR/blockdb" ]; then
   tar -xzf "$ARTIFACT_DIR/blockdb.tar.gz" -C "$ARTIFACT_DIR"
+  rm -f "$ARTIFACT_DIR/blockdb.tar.gz"
   echo "  blockdb/ extracted."
 fi
 if [ ! -f "$ARTIFACT_DIR/pipeline/data.tar.gz" ] && [ -d "$ARTIFACT_DIR/pipeline/data_parts" ]; then
@@ -88,6 +89,7 @@ if [ ! -f "$ARTIFACT_DIR/pipeline/data.tar.gz" ] && [ -d "$ARTIFACT_DIR/pipeline
 fi
 if [ -f "$ARTIFACT_DIR/pipeline/data.tar.gz" ] && [ ! -d "$ARTIFACT_DIR/pipeline/data" ]; then
   tar -xzf "$ARTIFACT_DIR/pipeline/data.tar.gz" -C "$ARTIFACT_DIR/pipeline"
+  rm -f "$ARTIFACT_DIR/pipeline/data.tar.gz"
   echo "  pipeline/data/ extracted."
 fi
 echo "Data OK."
@@ -99,5 +101,10 @@ echo ""
 echo "  Next steps:"
 echo "    1. Activate venv:  source .venv/bin/activate"
 echo "    2. Compile Rocq:   cd rocq && opam exec -- rocq compile Arbitrage.v"
-echo "    3. Run pipeline:   cd pipeline && python3 script/run_all.py --offline --from 0"
+echo "    3. Run pipeline (offline, bundled data):"
+echo "         cd pipeline && python3 script/run_all.py --offline --from 0"
+echo ""
+echo "    To reproduce the paper from scratch (online mode):"
+echo "         cd pipeline && python3 script/run_all.py \\"
+echo "             --online --config /path/to/ethereum/config.json --from 0"
 echo "============================================"
