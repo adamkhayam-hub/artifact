@@ -1,13 +1,13 @@
 """
-Detection accuracy: cross-reference Argos confidence tiers with Eigenphi.
+Detection accuracy: cross-reference Ours confidence tiers with Eigenphi.
 
-For each Argos reason-based category, compute:
+For each Ours reason-based category, compute:
   - How many Eigenphi also flags (agreement)
-  - How many Eigenphi does NOT flag (Argos-only)
+  - How many Eigenphi does NOT flag (Ours-only)
   - How many are in Eigenphi-excluded (believed position changes)
 
 Also compute:
-  - Eigenphi-only txs (FN candidates): Eigenphi flags but Argos doesn't
+  - Eigenphi-only txs (FN candidates): Eigenphi flags but Ours doesn't
   - P/R/F1 under different definitions of "positive"
 
 Reads from: data/system_compact.csv (run 00_preprocess.py first),
@@ -61,7 +61,7 @@ def main():
     p(f"Overlap max block: {overlap_max}")
     p(f"Eigenphi hashes in range: {len(eig_hashes):,}")
 
-    # --- Load Argos results and classify ---
+    # --- Load Ours results and classify ---
     system_data = {}  # hash -> (verdict, reasons, category)
     for r in rows:
         if r["block"] > overlap_max:
@@ -73,11 +73,11 @@ def main():
         system_data[h] = (verdict, reasons, category)
 
     system_hashes = set(system_data.keys())
-    p(f"Argos hashes in range: {len(system_hashes):,}")
+    p(f"Ours hashes in range: {len(system_hashes):,}")
 
     # --- Cross-reference by category ---
     p("\n" + "=" * 70)
-    p("CROSS-REFERENCE: ARGOS CATEGORIES vs EIGENPHI")
+    p("CROSS-REFERENCE: OURS CATEGORIES vs EIGENPHI")
     p("=" * 70)
 
     categories = [
@@ -98,7 +98,7 @@ def main():
         else:
             cat_not_in_eig[category] += 1
 
-    p(f"\n{'Category':<40s} {'Total':>10s} {'In Eig':>10s} {'%Eig':>7s} {'Argos-only':>12s}")
+    p(f"\n{'Category':<40s} {'Total':>10s} {'In Eig':>10s} {'%Eig':>7s} {'Ours-only':>12s}")
     p("-" * 82)
     for cat in categories:
         total = cat_counts[cat]
@@ -121,19 +121,19 @@ def main():
 
     eig_only = eig_hashes - system_hashes
 
-    p(f"Eigenphi flags, Argos doesn't:   {len(eig_only):,}")
+    p(f"Eigenphi flags, Ours doesn't:   {len(eig_only):,}")
 
     # --- P/R/F1 under different definitions ---
     p("\n" + "=" * 70)
     p("PRECISION / RECALL / F1")
     p("=" * 70)
-    p("(Eigenphi as ground truth, various Argos positive definitions)\n")
+    p("(Eigenphi as ground truth, various Ours positive definitions)\n")
 
     definitions = [
-        ("Argos: arbitrage only", lambda c: c == "confirmed_arbitrage"),
-        ("Argos: arbitrage + probable", lambda c: c in ("confirmed_arbitrage", "probable_arbitrage_incomplete")),
-        ("Argos: arbitrage + probable + attempted", lambda c: c in ("confirmed_arbitrage", "probable_arbitrage_incomplete", "attempted_arbitrage_unprofitable")),
-        ("Argos: all (arbitrage + all warnings)", lambda c: True),
+        ("Ours: arbitrage only", lambda c: c == "confirmed_arbitrage"),
+        ("Ours: arbitrage + probable", lambda c: c in ("confirmed_arbitrage", "probable_arbitrage_incomplete")),
+        ("Ours: arbitrage + probable + attempted", lambda c: c in ("confirmed_arbitrage", "probable_arbitrage_incomplete", "attempted_arbitrage_unprofitable")),
+        ("Ours: all (arbitrage + all warnings)", lambda c: True),
     ]
 
     for name, pred in definitions:

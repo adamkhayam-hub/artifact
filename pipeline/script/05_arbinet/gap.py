@@ -1,7 +1,7 @@
 """
 28_3way_gap.py — Analyze 3-way gap transactions.
 
-Step 1: Extract tx hashes not in Argos from 3-way comparison.
+Step 1: Extract tx hashes not in Ours from 3-way comparison.
 Step 2: Run debug_graph on each (via run_3way_gap.sh).
 Step 3: Check DOTs for yellow nodes (same as 27_cat4_to_gap.py).
 
@@ -60,7 +60,7 @@ def normalize_hash(h):
 
 
 def extract_hashes():
-    """Step 1: extract tx hashes not classified by Argos."""
+    """Step 1: extract tx hashes not classified by Ours."""
     system = set()
     with open(THREEWAY_CSV) as f:
         reader = csv.reader(f)
@@ -104,7 +104,7 @@ def extract_hashes():
     all_hashes = arbi_only + eig_only + both_not_system
     print(f"ArbiNet-only:     {len(arbi_only)}")
     print(f"Eigenphi-only:    {len(eig_only)}")
-    print(f"Both not Argos:   {len(both_not_system)}")
+    print(f"Both not Ours:   {len(both_not_system)}")
     print(f"Total to inspect: {len(all_hashes)}")
     print(f"Written to: {HASHES_JSON}")
     return result

@@ -5,7 +5,7 @@ Reads: data/cat4_forensic/summary.csv + individual arbitrage.json
 Writes: summaries/15_cat4_analysis_summary.txt
 
 Applies the decision tree from METHODOLOGY.md:
-  Q1: hasArbitrage? → Argos now detects it (was a bug fix)
+  Q1: hasArbitrage? → Ours now detects it (was a bug fix)
   Q2: Closed loops exist?
   Q3: Any with τ_in = τ_out?
   Q4: Multi-hop token round trip?
@@ -50,7 +50,7 @@ def classify_cat4(tx_hash, summary_row):
     if status != "ok":
         return "exec_error", f"debug_graph failed: {status}"
 
-    # Q1: Does Argos now detect it?
+    # Q1: Does Ours now detect it?
     if has_arb and verdict in ("arbitrage", "warning"):
         if verdict == "arbitrage":
             return "now_detected_confirmed", f"Bug fix: now confirmed arbitrage ({num_cycles} cycles)"

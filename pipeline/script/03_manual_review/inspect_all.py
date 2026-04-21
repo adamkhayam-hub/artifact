@@ -1,7 +1,7 @@
 """
 Inspect all sampled transactions and save results to subfolders.
 
-Loads the Argos CSV once into memory, then iterates over all samples.
+Loads the Ours CSV once into memory, then iterates over all samples.
 Prints full addresses (not truncated) for lookup.
 
 Reads from: data/05_manual_sample_cat*.csv, data/system_arbis.csv
@@ -237,7 +237,7 @@ def main():
                 target_hashes.add(h)
     print(f"Target hashes to look up: {len(target_hashes)}")
 
-    print("Scanning Argos dataset for matches...")
+    print("Scanning Ours dataset for matches...")
     system_data = {}
     with open(DATA_DIR / "system_arbis.csv", "r") as f:
         reader = csv.reader(f)
@@ -246,7 +246,7 @@ def main():
             h = normalize_hash(row[0])
             if h in target_hashes:
                 system_data[h] = (row[1], row[TAG_DATA_COL])
-    print(f"  Found {len(system_data):,} matches in Argos")
+    print(f"  Found {len(system_data):,} matches in Ours")
 
     print("Loading Eigenphi hashes...")
     eig_hashes = set()
@@ -283,14 +283,14 @@ def main():
                 except Exception as e:
                     output = f"ERROR parsing {tx_hash}: {e}"
             else:
-                # Eigenphi-only: no Argos data
+                # Eigenphi-only: no Ours data
                 block = row[1] if len(row) > 1 else "?"
                 output = (
                     f"{'=' * 70}\n"
                     f"TRANSACTION: {tx_hash}\n"
                     f"BLOCK: {block}\n"
                     f"{'=' * 70}\n"
-                    f"NOT IN ARGOS DATASET\n\n"
+                    f"NOT IN OURS DATASET\n\n"
                     f"EIGENPHI STATUS:\n"
                     f"  In Eigenphi main set:     {'YES' if tx_hash in eig_hashes else 'NO'}\n"
                 )
@@ -304,8 +304,8 @@ def main():
                 if line.startswith("Verdict:"):
                     verdict_line = line.split(":", 1)[1].strip()
                     break
-                elif "NOT IN ARGOS" in line:
-                    verdict_line = "not in Argos"
+                elif "NOT IN OURS" in line:
+                    verdict_line = "not in Ours"
                     break
             print(f"  [{i+1:2d}/{len(rows)}] {tx_hash[:14]}...  {verdict_line}")
 

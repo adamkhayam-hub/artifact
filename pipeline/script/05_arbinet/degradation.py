@@ -50,7 +50,7 @@ def p(msg="", f=None):
 
 
 def main():
-    # Load Argos (3-way CSV for the ArbiNet block range)
+    # Load Ours (3-way CSV for the ArbiNet block range)
     system_by_block = defaultdict(int)
     if THREEWAY_CSV.exists():
         with open(THREEWAY_CSV) as f:
@@ -110,7 +110,7 @@ def main():
         p(f"Windows: {len(windows)}", out)
         p("", out)
 
-        p(f"{'Window':<20s} {'Argos':>8s} {'ArbiNet':>8s} {'Eigenphi':>8s}", out)
+        p(f"{'Window':<20s} {'Ours':>8s} {'ArbiNet':>8s} {'Eigenphi':>8s}", out)
         p("-" * 48, out)
         for start, end, a, n, e in windows:
             p(f"  {start}-{end}  {a:>8d} {n:>8d} {e:>8d}", out)
@@ -136,7 +136,7 @@ def main():
         eigenphi_vals = [w[4] for w in windows]
 
         fig, ax = plt.subplots(figsize=(8, 4))
-        ax.plot(xs, system_vals, "o-", label="Argos", markersize=4, color="steelblue")
+        ax.plot(xs, system_vals, "o-", label="Ours", markersize=4, color="steelblue")
         ax.plot(xs, arbinet_vals, "s-", label="ArbiNet", markersize=4, color="orange")
         ax.plot(xs, eigenphi_vals, "^-", label="Eigenphi", markersize=4, color="green")
         ax.set_xlabel(f"Window ({WINDOW}-block)")

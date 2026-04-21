@@ -114,13 +114,13 @@ def analyze_transaction(filepath, addr_labels):
     """Analyze a single transaction and return a reasoned verdict."""
     content = filepath.read_text()
 
-    if "NOT IN ARGOS" in content:
+    if "NOT IN OURS" in content:
         tx_match = re.search(r"TRANSACTION: (0x[0-9a-f]+)", content)
         eigenphi_main = "In Eigenphi main set:     YES" in content
         return {
             "tx_hash": tx_match.group(1) if tx_match else "?",
             "final_verdict": "N/A",
-            "reasoning": "Transaction not in Argos dataset",
+            "reasoning": "Transaction not in Ours dataset",
             "arb_type": "N/A",
             "has_lending": False,
             "pools": [],

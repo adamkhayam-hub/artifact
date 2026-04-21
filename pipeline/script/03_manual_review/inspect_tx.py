@@ -1,5 +1,5 @@
 """
-Inspect a single transaction from the Argos dataset.
+Inspect a single transaction from the Ours dataset.
 
 Usage: python3 06_inspect_tx.py <tx_hash>
 
@@ -83,7 +83,7 @@ def main():
 
     target = normalize_hash(sys.argv[1])
 
-    # Search in Argos data
+    # Search in Ours data
     found = False
     with open(DATA_DIR / "system_arbis.csv", "r") as f:
         reader = csv.reader(f)
@@ -97,13 +97,13 @@ def main():
                 break
 
     if not found:
-        print(f"Transaction {target} not found in Argos dataset.")
+        print(f"Transaction {target} not found in Ours dataset.")
         # Check Eigenphi
         with open(EIGENPHI_FILTERED, "r") as f:
             reader = csv.reader(f)
             for erow in reader:
                 if normalize_hash(erow[1]) == target:
-                    print(f"Found in Eigenphi dataset (block {erow[0]}), but NOT in Argos.")
+                    print(f"Found in Eigenphi dataset (block {erow[0]}), but NOT in Ours.")
                     return
         print("Not found in Eigenphi either.")
         return

@@ -23,7 +23,7 @@ csv.field_size_limit(sys.maxsize)
 EVAL_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = EVAL_DIR / "data"
 
-ARGOS_CSV = DATA_DIR / "system_arbis.csv"
+OURS_CSV = DATA_DIR / "system_arbis.csv"
 OUTPUT_DIR = EVAL_DIR / "output"
 GENERATED_DATA_DIR = OUTPUT_DIR / "data"
 COMPACT_CSV = GENERATED_DATA_DIR / "system_compact.csv"
@@ -58,14 +58,14 @@ def normalize_hash(h):
 
 
 def main():
-    if not ARGOS_CSV.exists():
-        print(f"ERROR: {ARGOS_CSV} not found.")
+    if not OURS_CSV.exists():
+        print(f"ERROR: {OURS_CSV} not found.")
         sys.exit(1)
     GENERATED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     print("=" * 60)
     print("PREPROCESSING: single-pass extraction")
-    print(f"  Input:  {ARGOS_CSV}")
+    print(f"  Input:  {OURS_CSV}")
     print(f"  Output: {COMPACT_CSV}")
     print("=" * 60)
 
@@ -74,7 +74,7 @@ def main():
     parsed = 0
     errors = 0
 
-    with open(ARGOS_CSV, "r") as fin, \
+    with open(OURS_CSV, "r") as fin, \
          open(COMPACT_CSV, "w", newline="") as fout, \
          open(HASHES_TXT, "w") as fhash:
 
@@ -105,7 +105,7 @@ def main():
         # Reset — we need to handle the generator correctly
 
     # Re-read with proper streaming
-    with open(ARGOS_CSV, "r") as fin, \
+    with open(OURS_CSV, "r") as fin, \
          open(COMPACT_CSV, "w", newline="") as fout, \
          open(HASHES_TXT, "w") as fhash:
 
@@ -238,7 +238,7 @@ def main():
         print(f"  WARN: {EIGENPHI_FULL} not found, skipping Eigenphi filter")
 
     print(f"\n  Final evaluation: {EVAL_BLOCKS:,} blocks,"
-          f" {len(df_eval):,} Argos detections")
+          f" {len(df_eval):,} Ours detections")
 
 
 if __name__ == "__main__":

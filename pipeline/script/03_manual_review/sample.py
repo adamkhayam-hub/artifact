@@ -3,10 +3,10 @@ Sample transactions for manual validation.
 
 Categories:
   1. Both + confirmed (100): TP sanity check
-  2. Argos-only + confirmed (100): exclusive detections
+  2. Ours-only + confirmed (100): exclusive detections
   3. Eigenphi-only (200): investigate what Eigenphi flags
      that we don't — are these real arbitrages or FPs?
-  5. Argos-only + warnings (100): real structures or noise?
+  5. Ours-only + warnings (100): real structures or noise?
 
 Reads from: data/*.csv (ground truth, never modified)
 Writes to:  samples/05_manual_sample_cat{1,2,3,5}.csv
@@ -86,7 +86,7 @@ def get_transfers_from_cycle(cycle):
 
 
 def extract_summary(json_str):
-    """Extract a compact summary from the Argos JSON result.
+    """Extract a compact summary from the Ours JSON result.
     Handles both string-encoded and integer-encoded formats.
     """
     try:
@@ -160,7 +160,7 @@ def main():
                 eig_hashes.add(h)
                 eig_hash_block[h] = block
 
-    # --- Load Argos and classify ---
+    # --- Load Ours and classify ---
     # Store: hash -> (block, category, json_str)
     system_all = {}
     with open(DATA_DIR / "system_arbis.csv", "r") as f:
@@ -186,13 +186,13 @@ def main():
     # Cat 1: Both + confirmed
     cat1 = [h for h in (system_hashes & eig_hashes)
             if system_all[h][1] == "confirmed_arbitrage"]
-    # Cat 2: Argos-only + confirmed
+    # Cat 2: Ours-only + confirmed
     cat2 = [h for h in (system_hashes - eig_hashes)
             if system_all[h][1] == "confirmed_arbitrage"]
-    # Cat 3: Argos-only + NOT confirmed (warnings)
+    # Cat 3: Ours-only + NOT confirmed (warnings)
     cat3 = [h for h in (system_hashes - eig_hashes)
             if system_all[h][1] != "confirmed_arbitrage"]
-    # Cat 4: Eigenphi-only (not in Argos at all)
+    # Cat 4: Eigenphi-only (not in Ours at all)
     cat4 = list(eig_hashes - system_hashes)
 
     pools = {1: cat1, 2: cat2, 3: cat3, 4: cat4}
@@ -239,7 +239,7 @@ def main():
         4: random.sample(cat4, min(SAMPLE_SIZES[4], len(cat4))),
     }
 
-    # --- Write Cat 1, 2, 3 (have Argos data) ---
+    # --- Write Cat 1, 2, 3 (have Ours data) ---
     cat_names = {1: "both_confirmed", 2: "system_only_confirmed", 3: "system_only_warnings"}
     for cat_num in [1, 2, 3]:
         sample = samples[cat_num]
@@ -262,7 +262,7 @@ def main():
                 ])
         print(f"Wrote {len(sample)} txs to {path}")
 
-    # --- Write Cat 4 (Eigenphi-only, no Argos data) ---
+    # --- Write Cat 4 (Eigenphi-only, no Ours data) ---
     path = SAMPLES_DIR / "05_manual_sample_cat4_eigenphi_only.csv"
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)

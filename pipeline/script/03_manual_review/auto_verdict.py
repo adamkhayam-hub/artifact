@@ -184,10 +184,10 @@ def process_category(folder_name):
     for txt_file in sorted(folder.glob("tx_*.txt")):
         content = txt_file.read_text()
 
-        if "NOT IN ARGOS" in content:
+        if "NOT IN OURS" in content:
             tx_match = re.search(r"TRANSACTION: (0x[0-9a-f]+)", content)
             tx_hash = tx_match.group(1) if tx_match else txt_file.stem
-            results.append((tx_hash, "N/A", "not in Argos dataset"))
+            results.append((tx_hash, "N/A", "not in Ours dataset"))
             continue
 
         # Get tx hash

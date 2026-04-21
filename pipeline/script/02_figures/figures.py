@@ -3,7 +3,7 @@ Generate evaluation figures for the paper.
 
 Outputs PDF figures to paper/evaluation/figures/:
   - fig_confidence_tiers.pdf: agreement with Eigenphi by confidence tier
-  - fig_overlap.pdf: Argos vs Eigenphi detection overlap
+  - fig_overlap.pdf: Ours vs Eigenphi detection overlap
 
 Note: fig_cycle_lengths.pdf requires per-cycle transfer data from the
 full system_arbis.csv (cycle lengths are not stored in system_compact.csv).
@@ -44,7 +44,7 @@ plt.rcParams.update({
 
 
 def load_data():
-    """Load all datasets and return classified Argos data + Eigenphi hashes."""
+    """Load all datasets and return classified Ours data + Eigenphi hashes."""
     rows = load_compact()
 
     system_max = max(r["block"] for r in rows)
@@ -67,7 +67,7 @@ def load_data():
             if int(row[0]) <= overlap_max:
                 eig_hashes.add(normalize_hash(row[1]))
 
-    # Argos data filtered to overlap range
+    # Ours data filtered to overlap range
     system_data = {}
     for r in rows:
         if r["block"] > overlap_max:
@@ -82,7 +82,7 @@ def load_data():
 
 
 def fig_confidence_tiers(system_data, eig_hashes):
-    """Stacked bar chart: each tier split into Eigenphi-agreed vs Argos-only."""
+    """Stacked bar chart: each tier split into Eigenphi-agreed vs Ours-only."""
     categories = [
         ("Confirmed", "confirmed_arbitrage"),
         ("Probable", "probable_arbitrage_incomplete"),
@@ -110,7 +110,7 @@ def fig_confidence_tiers(system_data, eig_hashes):
     bars1 = ax.bar(x, agreed, width, label="Also in Eigenphi",
                    color="#4878A8", edgecolor="white", linewidth=0.3)
     bars2 = ax.bar(x, system_only, width, bottom=agreed,
-                   label="Argos only", color="#E8A87C",
+                   label="Ours only", color="#E8A87C",
                    edgecolor="white", linewidth=0.3)
 
     # Build x-axis labels with percentage in Eigenphi color
@@ -141,8 +141,8 @@ def fig_confidence_tiers(system_data, eig_hashes):
 
 
 def fig_overlap(system_data, eig_hashes):
-    """Three-column stacked bar: Eigenphi-only, Both, Argos-only,
-    each broken down by Argos confidence tier."""
+    """Three-column stacked bar: Eigenphi-only, Both, Ours-only,
+    each broken down by Ours confidence tier."""
     system_hashes = set(system_data.keys())
     both_hashes = system_hashes & eig_hashes
     system_only_hashes = system_hashes - eig_hashes
@@ -155,7 +155,7 @@ def fig_overlap(system_data, eig_hashes):
         ("Uncertain", "uncertain_mixed_balance", "#D4A5A5"),
     ]
 
-    # Count tiers for "Both" and "Argos-only"
+    # Count tiers for "Both" and "Ours-only"
     from collections import Counter
     both_tier_counts = Counter()
     for h in both_hashes:
@@ -169,12 +169,12 @@ def fig_overlap(system_data, eig_hashes):
 
     fig, ax = plt.subplots(figsize=(3.4, 2.4))
 
-    columns = ["Eigenphi\nonly", "Both", "Argos\nonly"]
+    columns = ["Eigenphi\nonly", "Both", "Ours\nonly"]
     x = np.arange(len(columns))
     width = 0.55
 
-    # Eigenphi-only: single gray bar (no Argos tiers)
-    # Both and Argos-only: stacked by tier
+    # Eigenphi-only: single gray bar (no Ours tiers)
+    # Both and Ours-only: stacked by tier
     for i, (tier_label, tier_key, color) in enumerate(tiers):
         both_val = both_tier_counts.get(tier_key, 0)
         system_val = system_only_tier_counts.get(tier_key, 0)
@@ -187,7 +187,7 @@ def fig_overlap(system_data, eig_hashes):
         ax.bar(x[1], both_val, width, bottom=both_bottom,
                color=color, edgecolor="white", linewidth=0.3,
                label=tier_label if i < len(tiers) else None)
-        # Argos-only column (index 2)
+        # Ours-only column (index 2)
         ax.bar(x[2], system_val, width, bottom=system_bottom,
                color=color, edgecolor="white", linewidth=0.3)
 
@@ -202,7 +202,7 @@ def fig_overlap(system_data, eig_hashes):
         ax.text(i, total + 30000, label,
                 ha="center", va="bottom", fontsize=7, fontweight="bold")
 
-    # Annotate the 295K confirmed in Argos-only
+    # Annotate the 295K confirmed in Ours-only
     confirmed_system_only = system_only_tier_counts.get("confirmed_arbitrage", 0)
     ax.annotate(f"{confirmed_system_only/1e3:.0f}K\nconfirmed",
                 xy=(x[2], confirmed_system_only / 2),
@@ -229,7 +229,7 @@ def fig_overlap(system_data, eig_hashes):
 def main():
     print("Loading data...")
     system_data, eig_hashes = load_data()
-    print(f"Loaded {len(system_data):,} Argos results, {len(eig_hashes):,} Eigenphi hashes")
+    print(f"Loaded {len(system_data):,} Ours results, {len(eig_hashes):,} Eigenphi hashes")
 
     print("Generating figures...")
     fig_confidence_tiers(system_data, eig_hashes)
@@ -243,7 +243,7 @@ def main():
         f"Figures generated: {FIGURES_DIR}",
         f"  fig_confidence_tiers.pdf",
         f"  fig_overlap.pdf",
-        f"Argos results loaded: {len(system_data):,}",
+        f"Ours results loaded: {len(system_data):,}",
         f"Eigenphi hashes loaded: {len(eig_hashes):,}",
     ]
     output_path = SUMMARIES_DIR / "02_figures/figures.txt"

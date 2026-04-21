@@ -1,7 +1,7 @@
 """
 Topology breakdown of detected arbitrages.
 
-For each Argos result, extract:
+For each Ours result, extract:
   - Number of cycles (transfersInCycles)
   - Verdict (arbitrage vs warning)
   - Whether lending is involved (num_leftovers > 0 as proxy)
@@ -31,7 +31,7 @@ def main():
 
     rows = load_compact()
 
-    # --- Parse all Argos results ---
+    # --- Parse all Ours results ---
     cycle_count_dist = Counter()  # (verdict, n_cycles) -> count
     verdict_count = Counter()
     has_lending = Counter()  # verdict -> count
