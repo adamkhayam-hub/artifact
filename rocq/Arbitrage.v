@@ -12,7 +12,7 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 84 lemmas, 0 axioms, 0 Admitted.
+    Statistics: 83 lemmas/theorems, 0 axioms, 0 Admitted.
     Rewriting rules: 11 constructors covering
     all 15 rules from Table 1 (R1--R15).
     Compile: opam exec -- rocq compile Arbitrage.v
