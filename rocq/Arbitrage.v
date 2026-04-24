@@ -1217,6 +1217,50 @@ Proof.
   auto.
 Qed.
 
+(** End-to-end soundness: if the pipeline declares
+    VArbitrage from the reduced AST state, and the
+    pipeline's Validate-Deltas step has stamped every
+    extracted cycle with validated_arbitrage, then
+    (a) the reduced AST has the expected shape
+        (cycles present, no leftovers, no negative
+         or mixed final balance), and
+    (b) at least one cycle in the extracted list
+        satisfies Definition 4 (the economic
+        predicate: ch_label = Arbitrage and
+        ch_delta > 0 at the origin).
+
+    The premises [cycles <> []] and
+    [forall c, In c cycles -> validated_arbitrage c]
+    are supplied by the OCaml pipeline
+    (Extract-and-Recover and Validate-Deltas
+    respectively); they are not themselves modeled
+    in Rocq, so this corollary makes them explicit
+    hypotheses rather than deriving them.  The flag
+    cascade half is discharged by
+    arbitrage_implies_clean_ast; the existential
+    half composes soundness_full with that fact. *)
+Corollary soundness_end_to_end :
+  forall has_cyc has_left final_neg final_mixed cycles,
+    classify
+      (compute_reasons has_cyc has_left
+         final_neg final_mixed) = VArbitrage ->
+    cycles <> [] ->
+    (forall c, In c cycles -> validated_arbitrage c) ->
+    (has_cyc = true /\ has_left = false /\
+     final_neg = false /\ final_mixed = false) /\
+    exists c, In c cycles /\ validated_arbitrage c.
+Proof.
+  intros hc hl fn fm cycles Hclass Hnonempty Hvalid.
+  split.
+  - exact (arbitrage_implies_clean_ast hc hl fn fm Hclass).
+  - pose proof
+      (soundness_full
+         (compute_reasons hc hl fn fm) cycles
+         Hclass (fun _ => Hnonempty) Hvalid)
+      as [_ Hex].
+    exact Hex.
+Qed.
+
 (** The implementation's annotate_and_reduce is a
     deterministic function.
 
