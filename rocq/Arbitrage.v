@@ -1505,20 +1505,15 @@ Qed.
     This bridges the two formulations.
     We state soundness: step_fn only constructs
     valid merges and annotations. *)
-(** The following three lemmas establish that the
+(** The following lemmas establish that the
     deterministic step decreases the measure.
-    The proofs require induction on annotate_all_fn
-    and try_merge_children.  The key properties:
+    Key properties proved below:
     - annotate_all_fn preserves count_children
       (only relabels, no structural change)
     - annotate_all_fn does not increase
       count_unlabeled (labels go from false to true)
     - try_merge_children replaces two children with
-      one, strictly decreasing list length
-
-    These structural inductions are tedious but
-    straightforward; we defer them to keep the
-    main development focused. *)
+      one, strictly decreasing list length *)
 (** Helper: fold_left over map with a function
     that preserves values. *)
 Lemma fold_left_map_eq :
@@ -1950,9 +1945,9 @@ Proof.
   - reflexivity.
 Qed.
 
-From Stdlib Require Import Classical.
-
-(** Termination of the deterministic fixpoint. *)
+(** Termination of the deterministic fixpoint.
+    Constructive proof by case analysis on the
+    option result of [step_fn]. *)
 Theorem fixpoint_terminates :
   forall from_ (T0 : reduced_cft),
     exists Tf, fixpoint_star_det from_ T0 Tf /\
@@ -1961,15 +1956,19 @@ Proof.
   intros from_ T0.
   induction T0 as [T0 IH]
     using (well_founded_ind (fixpoint_step_det_wf from_)).
-  destruct (classic (exists T', fixpoint_step_det from_ T0 T'))
-    as [[T1 Hstep] | Hnex].
-  - destruct (IH T1 Hstep) as [Tf [Hstar Hnf]].
+  remember (step_fn from_ T0) as st eqn:Hst.
+  destruct st as [T1 |].
+  - assert (Hstep : fixpoint_step_det from_ T0 T1).
+    { unfold fixpoint_step_det. rewrite <- Hst. reflexivity. }
+    destruct (IH T1 Hstep) as [Tf [Hstar Hnf]].
     exists Tf. split.
     + eapply FSD_step; eassumption.
     + exact Hnf.
   - exists T0. split.
     + apply FSD_refl.
-    + intros T' Hstep. apply Hnex. exists T'. exact Hstep.
+    + intros T' Hstep.
+      unfold fixpoint_step_det in Hstep.
+      rewrite <- Hst in Hstep. discriminate.
 Qed.
 
 (** Confluence: trivial from determinism. *)
