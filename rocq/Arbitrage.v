@@ -149,10 +149,33 @@ Definition ch_token_out (c : chain_tree) : token :=
   | CT_node _ _ _ _ to_ _ _ _ _ _ => to_
   end.
 
-Definition ch_delta (c : chain_tree) : address -> token -> Z :=
+(** Signed balance contribution of a single transfer
+    at (address, token): +amount if we query at the
+    destination with the transfer's token, -amount
+    at the source, 0 otherwise. *)
+Definition transfer_delta (t : transfer)
+    (a : address) (tok : token) : Z :=
+  if token_eq_dec tok (tr_token t) then
+    if address_eq_dec a (tr_dest t)
+    then Z.of_nat (tr_amount t)
+    else if address_eq_dec a (tr_source t)
+    then (- Z.of_nat (tr_amount t))%Z
+    else 0%Z
+  else 0%Z.
+
+(** ch_delta aggregates signed transfer amounts over
+    all leaves of a chain_tree.  Computed from the
+    tree structure rather than stored, so the
+    semantic invariant
+    ch_delta c a tok = sum over leaves of
+      transfer_delta t a tok
+    holds by definition. *)
+Fixpoint ch_delta (c : chain_tree)
+    (a : address) (tok : token) : Z :=
   match c with
-  | CT_transfer _ => fun _ _ => 0%Z
-  | CT_node _ _ _ _ _ _ d _ _ _ => d
+  | CT_transfer t => transfer_delta t a tok
+  | CT_node _ _ _ _ _ _ _ _ l r =>
+      (ch_delta l a tok + ch_delta r a tok)%Z
   end.
 
 (** address_in_chain: does address a appear as a
@@ -184,6 +207,37 @@ Fixpoint chain_transfers (c : chain_tree) : list transfer :=
   | CT_node _ _ _ _ _ _ _ _ l r =>
       chain_transfers l ++ chain_transfers r
   end.
+
+(** Semantic invariant: ch_delta aggregates
+    signed transfer amounts across the chain's
+    leaves.  This connects the syntactic [ch_delta]
+    function to the semantic balance computed
+    from the original [transfer_graph]. *)
+Lemma fold_right_Zadd_app :
+  forall (l1 l2 : list Z),
+    fold_right Z.add 0%Z (l1 ++ l2) =
+    (fold_right Z.add 0%Z l1 +
+     fold_right Z.add 0%Z l2)%Z.
+Proof.
+  induction l1 as [|x xs IH]; simpl; intros l2.
+  - lia.
+  - rewrite IH. lia.
+Qed.
+
+Lemma ch_delta_sum_leaves :
+  forall c a tok,
+    ch_delta c a tok =
+    fold_right Z.add 0%Z
+      (map (fun t => transfer_delta t a tok)
+           (chain_transfers c)).
+Proof.
+  induction c as [t | o d m ti to_ ft delta lbl l IHl r IHr];
+    simpl; intros a tok.
+  - rewrite Z.add_0_r. reflexivity.
+  - rewrite IHl, IHr.
+    rewrite map_app, fold_right_Zadd_app.
+    reflexivity.
+Qed.
 
 (** Extract all transfers from a reduced CFT. *)
 Fixpoint rcft_transfers (t : reduced_cft) : list transfer :=
