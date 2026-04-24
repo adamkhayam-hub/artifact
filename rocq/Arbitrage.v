@@ -49,10 +49,6 @@ Parameter token_eq_dec :
     and its canonical wrapped form are identified
     (e.g., ETH and WETH on Ethereum). *)
 Parameter token_equiv : token -> token -> bool.
-Parameter token_equiv_refl :
-  forall t, token_equiv t t = true.
-Parameter token_equiv_sym :
-  forall t1 t2, token_equiv t1 t2 = token_equiv t2 t1.
 
 Definition amount := nat.
 
