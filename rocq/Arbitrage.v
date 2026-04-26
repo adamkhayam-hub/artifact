@@ -12,7 +12,7 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 83 lemmas/theorems, 0 axioms, 0 Admitted.
+    Statistics: 109 lemmas/theorems, 0 axioms, 0 Admitted.
     Rewriting rules: 11 constructors covering
     all 15 rules from Table 1 (R1--R15).
     Compile: opam exec -- rocq compile Arbitrage.v
@@ -299,7 +299,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
 
   (** R1: Swap chain.  Two adjacent leaves with
       different tokens.  [eth_graph.ml:580] *)
-  | RS_swap_chain : forall t1 t2 c,
+  | RS_swap_chain : forall t1 t2 c addr,
       chainable t1 t2 ->
       c = CT_node (tr_source t1) (tr_dest t2)
                   [tr_dest t1]
@@ -309,8 +309,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   Chaining
                   (CT_transfer t1) (CT_transfer t2) ->
       rewrite_step
-        (RTree (tr_source t1) [RLeaf t1; RLeaf t2])
-        (RTree (tr_source t1) [RChain c])
+        (RTree addr [RLeaf t1; RLeaf t2])
+        (RTree addr [RChain c])
 
   (** R2: Burn chain.  A burn transfer adjacent
       to a regular transfer.
@@ -2966,6 +2966,224 @@ Proof.
   apply (IH (S i)).
   - apply Hin. exact (Hstep i).
   - intros n. exact (Hstep n).
+Qed.
+
+(* ============================================================
+   Section 13c: Phase-2 confluence via determinism
+
+   Following the same template as Phase 3
+   ([step_fn], [confluence]): we expose a
+   deterministic Phase-2 step function
+   ([phase2_step_fn]) covering the leaf-pair rules
+   (R1--R5, R10).  The function picks a canonical
+   priority order R5 > R2 > R3 > R4 > R10 > R1
+   among overlapping preconditions, mirroring
+   Property~\ref{prop:dse} (DSE) in the paper.
+
+   We prove:
+   - [phase2_step_fn_det]:  determinism (trivial,
+     it is a function);
+   - [phase2_step_fn_sound]: soundness w.r.t.
+     [rewrite_step] (every step the function takes
+     is a step the spec allows);
+   - [phase2_step_fn_decreases]: termination via
+     [measure_phase2];
+   - [phase2_confluence]: the function's
+     normal forms are unique (immediate from
+     determinism, mirrors [confluence] for Phase 3).
+
+   Completeness w.r.t. the relational [rewrite_step]
+   is intentionally not claimed -- the spec is
+   non-deterministic and the function realizes one
+   canonical reduction strategy, the same scope as
+   [step_fn] for Phase 3. ============================================================ *)
+
+(** Canonical leaf-pair chain (Chaining/Burn/Mint):
+    same shape regardless of which rule fires. *)
+Definition leaf_pair_chain
+    (l : construction_label) (t1 t2 : transfer) : chain_tree :=
+  CT_node (tr_source t1) (tr_dest t2)
+          [tr_dest t1]
+          (tr_token t1) (tr_token t2)
+          t1 (fun _ _ => 0%Z) l
+          (CT_transfer t1) (CT_transfer t2).
+
+(** Pool-cycle chain (R4) has [dest1] as both
+    origin-side endpoint and destination -- the
+    sender escapes the pair. *)
+Definition pool_cycle_chain
+    (t1 t2 : transfer) : chain_tree :=
+  CT_node (tr_source t1) (tr_dest t1)
+          [tr_dest t1]
+          (tr_token t1) (tr_token t2)
+          t1 (fun _ _ => 0%Z) Cycle
+          (CT_transfer t1) (CT_transfer t2).
+
+(** Deterministic leaf-pair combiner.  Priority
+    order R5 > R2 > R3 > R4 > R10 > R1 fixes a
+    canonical choice when multiple rule
+    preconditions hold for the same adjacent pair. *)
+Definition try_combine_leaves
+    (t1 t2 : transfer) : option chain_tree :=
+  if address_eq_dec (tr_dest t1) (tr_source t2) then
+    if is_singleton_router (tr_dest t1) then
+      if token_eq_dec (tr_token t1) (tr_token t2)
+      then Some (leaf_pair_chain Chaining t1 t2) (* R5 *)
+      else None
+    else if is_burn t1
+    then Some (leaf_pair_chain TokenBurn t1 t2)  (* R2 *)
+    else if is_mint t2
+    then Some (leaf_pair_chain TokenMint t1 t2)  (* R3 *)
+    else if address_eq_dec (tr_dest t2) (tr_source t1) then
+      if address_eq_dec (tr_sender t1) (tr_dest t1)
+      then None
+      else Some (pool_cycle_chain t1 t2)         (* R4 *)
+    else if token_eq_dec (tr_token t1) (tr_token t2)
+    then Some (leaf_pair_chain Chaining t1 t2)   (* R10 *)
+    else if address_eq_dec (tr_sender t2) (tr_dest t1)
+    then None
+    else Some (leaf_pair_chain Chaining t1 t2)   (* R1 *)
+  else None.
+
+(** Top-level Phase-2 step on a 2-leaf tree. *)
+Definition phase2_step_fn (t : reduced_cft) : option reduced_cft :=
+  match t with
+  | RTree addr [RLeaf t1; RLeaf t2] =>
+      match try_combine_leaves t1 t2 with
+      | Some c => Some (RTree addr [RChain c])
+      | None => None
+      end
+  | _ => None
+  end.
+
+Definition phase2_step_det (t t' : reduced_cft) : Prop :=
+  phase2_step_fn t = Some t'.
+
+(** Determinism: trivially, [phase2_step_fn] is a
+    function. *)
+Lemma phase2_step_fn_det :
+  forall t t1 t2,
+    phase2_step_det t t1 ->
+    phase2_step_det t t2 ->
+    t1 = t2.
+Proof.
+  unfold phase2_step_det. intros t t1 t2 H1 H2.
+  rewrite H1 in H2. injection H2; auto.
+Qed.
+
+(** Soundness: every function-step is a spec-step. *)
+Theorem phase2_step_fn_sound :
+  forall t t',
+    phase2_step_fn t = Some t' ->
+    rewrite_step t t'.
+Proof.
+  intros t t' Hfn.
+  unfold phase2_step_fn in Hfn.
+  destruct t as [tr | c | addr children]; try discriminate.
+  destruct children as [|x rest]; try discriminate.
+  destruct x as [t1 | c1 | a1 ch1]; try discriminate.
+  destruct rest as [|y rest']; try discriminate.
+  destruct y as [t2 | c2 | a2 ch2]; try discriminate.
+  destruct rest' as [|? ?]; try discriminate.
+  unfold try_combine_leaves in Hfn.
+  destruct (address_eq_dec (tr_dest t1) (tr_source t2))
+    as [Hadj | _]; [| discriminate].
+  destruct (is_singleton_router (tr_dest t1)) eqn:Hr.
+  - (* router branch (R5) *)
+    destruct (token_eq_dec (tr_token t1) (tr_token t2))
+      as [Htok | _]; [| discriminate].
+    injection Hfn as <-.
+    apply (RS_router_chain t1 t2 _ addr Hadj Htok Hr eq_refl).
+  - destruct (is_burn t1) eqn:Hburn.
+    + (* R2 *)
+      injection Hfn as <-.
+      apply (RS_burn_chain t1 t2 _ addr Hburn Hadj eq_refl).
+    + destruct (is_mint t2) eqn:Hmint.
+      * (* R3 *)
+        injection Hfn as <-.
+        apply (RS_mint_chain t1 t2 _ addr Hmint Hadj eq_refl).
+      * destruct (address_eq_dec (tr_dest t2) (tr_source t1))
+          as [Hcyc | _].
+        -- destruct (address_eq_dec (tr_sender t1) (tr_dest t1))
+             as [_ | Hsender]; [discriminate |].
+           (* R4 *)
+           injection Hfn as <-.
+           apply (RS_pool_cycle t1 t2 _ addr Hadj Hcyc Hsender
+                                 eq_refl).
+        -- destruct (token_eq_dec (tr_token t1) (tr_token t2))
+             as [Htok | Htok_ne].
+           ++ (* R10 *)
+              injection Hfn as <-.
+              apply (RS_same_token_chain t1 t2 _ addr Hadj Htok
+                                          eq_refl).
+           ++ destruct (address_eq_dec (tr_sender t2) (tr_dest t1))
+                as [_ | Hsend2]; [discriminate |].
+              (* R1: chainable t1 t2 *)
+              injection Hfn as <-.
+              assert (Hch : chainable t1 t2)
+                by (split; [exact Hadj | split; auto]).
+              apply (RS_swap_chain t1 t2 _ addr Hch eq_refl).
+Qed.
+
+(** Termination: every function-step strictly
+    decreases [measure_phase2]. *)
+Lemma phase2_step_fn_decreases :
+  forall t t',
+    phase2_step_fn t = Some t' ->
+    lt_lex (measure_phase2 t') (measure_phase2 t).
+Proof.
+  intros t t' Hfn.
+  apply rewrite_step_decreases.
+  apply phase2_step_fn_sound. exact Hfn.
+Qed.
+
+(** Reflexive-transitive closure of the
+    deterministic Phase-2 step. *)
+Inductive phase2_star_det : reduced_cft -> reduced_cft -> Prop :=
+  | P2D_refl : forall t, phase2_star_det t t
+  | P2D_step : forall t1 t2 t3,
+      phase2_step_det t1 t2 ->
+      phase2_star_det t2 t3 ->
+      phase2_star_det t1 t3.
+
+(** Determinism lifts to the closure: any two
+    star-reductions ending in normal forms produce
+    the same normal form. *)
+Lemma phase2_star_deterministic :
+  forall T T1 T2,
+    phase2_star_det T T1 ->
+    phase2_star_det T T2 ->
+    (forall T', ~ phase2_step_det T1 T') ->
+    (forall T', ~ phase2_step_det T2 T') ->
+    T1 = T2.
+Proof.
+  intros T T1 T2 Hstar1.
+  revert T2.
+  induction Hstar1 as [T | T Tmid T1 Hstep1 Hstar1 IH].
+  - intros T2 Hstar2 Hnf1 Hnf2.
+    inversion Hstar2; subst.
+    + reflexivity.
+    + exfalso. exact (Hnf1 t2 H).
+  - intros T2 Hstar2 Hnf1 Hnf2.
+    inversion Hstar2; subst.
+    + exfalso. exact (Hnf2 Tmid Hstep1).
+    + assert (Tmid = t2) as Heq
+        by exact (phase2_step_fn_det T Tmid t2 Hstep1 H).
+      subst. exact (IH T2 H0 Hnf1 Hnf2).
+Qed.
+
+(** Phase-2 confluence (mirrors [confluence] for
+    Phase 3): two normal forms reachable from the
+    same term coincide.  Immediate from determinism. *)
+Theorem phase2_confluence :
+  forall T0 Tf1 Tf2,
+    phase2_star_det T0 Tf1 ->
+    phase2_star_det T0 Tf2 ->
+    (forall T', ~ phase2_step_det Tf1 T') ->
+    (forall T', ~ phase2_step_det Tf2 T') ->
+    Tf1 = Tf2.
+Proof.
+  exact phase2_star_deterministic.
 Qed.
 
 (* ============================================================
