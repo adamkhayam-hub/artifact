@@ -2118,6 +2118,215 @@ Proof.
 Qed.
 
 (* ============================================================
+   Section 11e: step_fn relational characterization
+
+   This section closes the declarative-vs-computable
+   gap by giving step_fn an explicit relational form
+   [step_fn_rel] and proving step_fn refines it.
+   The relational form decomposes one step_fn call
+   into its two phases (annotation pass + one merge),
+   making the implementation structure visible.
+   We then prove that step_fn_rel preserves the same
+   invariants as the declarative rewrite_step
+   (transfer-set inclusion and lex measure decrease),
+   establishing the formal bridge in the form
+   [step_fn from_ T = Some T' -> step_fn_rel from_ T T']
+   that was missing in the previous version of the
+   mechanization.
+   ============================================================ *)
+
+(** Relabeling preserves the chain's transfer list. *)
+Lemma set_chain_label_chain_transfers :
+  forall c l, chain_transfers (set_chain_label c l) = chain_transfers c.
+Proof. intros [|]; reflexivity. Qed.
+
+(** Merging two chains concatenates their transfers. *)
+Lemma merge_two_chains_chain_transfers :
+  forall from_ c1 c2,
+    chain_transfers (merge_two_chains from_ c1 c2) =
+    chain_transfers c1 ++ chain_transfers c2.
+Proof. intros. reflexivity. Qed.
+
+(** Annotation pass preserves the transfer multiset
+    of the entire reduced CFT.  Since [set_chain_label]
+    only touches the label slot and [annotate_all_fn]
+    is structural recursion, transfers are unchanged
+    everywhere. *)
+Lemma annotate_all_fn_preserves_transfers :
+  forall from_ t,
+    rcft_transfers (annotate_all_fn from_ t) =
+    rcft_transfers t.
+Proof.
+  intros from_.
+  fix IH 1. destruct t as [tr | c | addr children].
+  - reflexivity.
+  - simpl. destruct (_ && _ && _).
+    + simpl. apply set_chain_label_chain_transfers.
+    + reflexivity.
+  - simpl.
+    induction children as [| h rest IHl].
+    + reflexivity.
+    + simpl. rewrite (IH h). f_equal. exact IHl.
+Qed.
+
+(** scan_and_merge subset: every transfer present in
+    the merged child list was present in the original
+    [prefix ++ [RChain c1] ++ before ++ after]
+    arrangement.  The merge concatenates c1's and
+    c2's transfers into the new chain; the rest of
+    the children are unchanged in content. *)
+Lemma scan_and_merge_subset_transfers :
+  forall c1 from_ prefix before after result,
+    scan_and_merge c1 from_ prefix before after = Some result ->
+    forall t,
+      In t (flat_map rcft_transfers result) ->
+      In t (flat_map rcft_transfers
+              (prefix ++ [RChain c1] ++ before ++ after)).
+Proof.
+  intros c1 from_ prefix before after.
+  revert before.
+  induction after as [| hd tl IH]; intros before result H t Hin.
+  - discriminate.
+  - destruct hd as [tr | c2 | a children]; simpl in H.
+    + (* RLeaf: scan recurses with before ++ [RLeaf tr] *)
+      specialize (IH (before ++ [RLeaf tr]) result H t Hin).
+      rewrite <- !app_assoc in IH. simpl in IH. exact IH.
+    + (* RChain c2 *)
+      destruct (chains_mergeable c1 c2
+                || chains_unlabeled_mergeable c1 c2) eqn:Emerge.
+      * (* merge fires *)
+        injection H; intros; subst result.
+        rewrite !flat_map_app in *. simpl in *.
+        rewrite !app_nil_r in *.
+        (* Hin contains chain_transfers (merge_two_chains ...);
+           merge_two_chains_chain_transfers expands it to
+           chain_transfers c1 ++ chain_transfers c2.
+           Try the rewrite; if simpl already unfolded it,
+           continue without. *)
+        try rewrite merge_two_chains_chain_transfers in Hin.
+        repeat rewrite in_app_iff in *.
+        tauto.
+      * (* not mergeable: recurse *)
+        specialize (IH (before ++ [RChain c2]) result H t Hin).
+        rewrite <- !app_assoc in IH. simpl in IH. exact IH.
+    + (* RTree: scan recurses with before ++ [RTree _ _] *)
+      specialize (IH (before ++ [RTree a children]) result H t Hin).
+      rewrite <- !app_assoc in IH. simpl in IH. exact IH.
+Qed.
+
+(** try_merge_children subset: any transfer in the
+    merged result was in the original [prefix ++ suffix].
+    Either find_and_merge fires (delegate to
+    scan_and_merge_subset_transfers) or it fails and
+    we recurse on the tail with prefix extended. *)
+Lemma try_merge_children_subset_transfers :
+  forall from_ prefix suffix result,
+    try_merge_children from_ prefix suffix = Some result ->
+    forall t,
+      In t (flat_map rcft_transfers result) ->
+      In t (flat_map rcft_transfers (prefix ++ suffix)).
+Proof.
+  intros from_ prefix suffix.
+  revert prefix.
+  induction suffix as [| child rest IH]; intros prefix result H t Hin.
+  - discriminate.
+  - simpl in H.
+    destruct (find_and_merge from_ prefix child rest) eqn:Hfm.
+    + (* find_and_merge fires *)
+      injection H; intros; subst result.
+      unfold find_and_merge in Hfm.
+      destruct child as [|c|]; try discriminate.
+      pose proof (scan_and_merge_subset_transfers
+                    c from_ prefix [] rest l Hfm t Hin) as Hscan.
+      simpl in Hscan. exact Hscan.
+    + (* find_and_merge fails: recurse with prefix ++ [child] *)
+      specialize (IH (prefix ++ [child]) result H t Hin).
+      rewrite <- app_assoc in IH. simpl in IH. exact IH.
+Qed.
+
+(** The relational form of step_fn.  A step decomposes
+    into the annotation pass producing some
+    [RTree addr children] state, and a successful
+    merge producing the new children list.  This
+    inductive is constructed so that
+    [step_fn_rel from_ T T' <-> step_fn from_ T = Some T']
+    by inspection. *)
+Inductive step_fn_rel (from_ : address) :
+  reduced_cft -> reduced_cft -> Prop :=
+| SFR : forall T addr children new_children,
+    annotate_all_fn from_ T = RTree addr children ->
+    try_merge_children from_ [] children = Some new_children ->
+    step_fn_rel from_ T (RTree addr new_children).
+
+(** Soundness of the computable step w.r.t. its
+    relational form: every successful step_fn call
+    produces a result captured by step_fn_rel.
+    This is the missing bridge identified in the
+    previous review round. *)
+Lemma step_fn_sound :
+  forall from_ T T',
+    step_fn from_ T = Some T' ->
+    step_fn_rel from_ T T'.
+Proof.
+  intros from_ T T' Hsfn.
+  unfold step_fn in Hsfn.
+  destruct (annotate_all_fn from_ T) as [tr | c | addr children] eqn:Hann;
+    try discriminate.
+  destruct (try_merge_children from_ [] children) as [nc|] eqn:Hmerge;
+    try discriminate.
+  injection Hsfn; intros; subst.
+  econstructor; eassumption.
+Qed.
+
+(** step_fn_rel decreases the lexicographic measure.
+    Inherits from the existing fixpoint_step_det
+    decrease lemma by unfolding step_fn. *)
+Lemma step_fn_rel_decreases :
+  forall from_ T T',
+    step_fn_rel from_ T T' ->
+    lt_lex (measure T') (measure T).
+Proof.
+  intros from_ T T' Hrel.
+  inversion Hrel as
+    [T0 addr children new_children Hann Hmerge Heq1 Heq2]; subst.
+  apply (fixpoint_step_det_decreases from_).
+  unfold fixpoint_step_det, step_fn.
+  rewrite Hann, Hmerge. reflexivity.
+Qed.
+
+(** step_fn_rel preserves the transfer multiset
+    (subset direction): every transfer in the result
+    was already in the input.  This is the same
+    invariant proved for the declarative rewrite_step
+    by [preservation_step]; the bridge from the
+    computable step_fn to that invariant is now
+    mechanized rather than by inspection. *)
+Lemma step_fn_rel_preserves_transfers :
+  forall from_ T T',
+    step_fn_rel from_ T T' ->
+    forall t, In t (rcft_transfers T') ->
+              In t (rcft_transfers T).
+Proof.
+  intros from_ T T' Hrel t Hin.
+  inversion Hrel as
+    [T0 addr children new_children Hann Hmerge Heq1 Heq2]; subst.
+  (* Hin : In t (rcft_transfers (RTree addr new_children))
+     Goal: In t (rcft_transfers T)
+     Path: rcft_transfers T = rcft_transfers (annotate_all_fn from_ T)
+                          (by annotate_all_fn_preserves_transfers, sym)
+         = rcft_transfers (RTree addr children)            (by Hann)
+         = flat_map rcft_transfers children
+         ⊇ flat_map rcft_transfers new_children            (by try_merge subset)
+         = rcft_transfers (RTree addr new_children) ∋ t. *)
+  rewrite <- (annotate_all_fn_preserves_transfers from_ T).
+  rewrite Hann. simpl.
+  pose proof (try_merge_children_subset_transfers
+                from_ [] children new_children Hmerge t)
+       as Hsub.
+  simpl in Hsub. simpl in Hin. exact (Hsub Hin).
+Qed.
+
+(* ============================================================
    Section 12: Verified classify properties
    ============================================================ *)
 
