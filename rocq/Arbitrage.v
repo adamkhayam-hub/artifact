@@ -1110,6 +1110,117 @@ Fixpoint has_arb_cycles (t : reduced_cft) : bool :=
       existsb has_arb_cycles children
   end.
 
+(** Extract every Arbitrage-labeled chain from a
+    reduced CFT.  Mirrors the OCaml
+    Extract-and-Recover step that pulls cycles from
+    the tree before passing them to Validate-Deltas. *)
+Fixpoint extract_arb_cycles (t : reduced_cft)
+    : list chain_tree :=
+  match t with
+  | RLeaf _ => []
+  | RChain c =>
+      match ch_label c with
+      | Arbitrage => [c]
+      | _ => []
+      end
+  | RTree _ children =>
+      (fix loop (ts : list reduced_cft) : list chain_tree :=
+         match ts with
+         | [] => []
+         | t :: rest => extract_arb_cycles t ++ loop rest
+         end) children
+  end.
+
+(** Validate-Deltas modeled in Rocq: filter the
+    extracted cycles by positive gross delta at
+    the origin/token-in pair.  This is the exact
+    boolean predicate the OCaml
+    [remove_arbitrage_cycles_with_no_balance]
+    implements (eth_arbitrage.ml:784). *)
+Definition validate_deltas
+    (cs : list chain_tree) : list chain_tree :=
+  filter (fun c =>
+    Z.gtb (ch_delta c (ch_origin c) (ch_token_in c)) 0)
+    cs.
+
+(** Cons-step reduction for [extract_arb_cycles] over an
+    [RTree]: holds definitionally because the inline
+    fix-helper unfolds the same way. *)
+Lemma extract_arb_cycles_RTree_cons :
+  forall a t rest,
+    extract_arb_cycles (RTree a (t :: rest)) =
+    extract_arb_cycles t ++ extract_arb_cycles (RTree a rest).
+Proof. reflexivity. Qed.
+
+(** Every chain in [extract_arb_cycles t] is labeled
+    Arbitrage by construction. *)
+Lemma extract_arb_cycles_labeled :
+  forall t c, In c (extract_arb_cycles t) ->
+              ch_label c = Arbitrage.
+Proof.
+  fix IH 1. intros t c.
+  destruct t as [tr | c0 | addr children].
+  - intros Hin. simpl in Hin. contradiction.
+  - intros Hin. simpl in Hin.
+    destruct (ch_label c0) eqn:Elab; simpl in Hin;
+      try contradiction.
+    destruct Hin as [Heq | Hin]; [|contradiction].
+    subst c. exact Elab.
+  - revert c.
+    induction children as [| ch rest IHrest];
+      intros c Hin.
+    + simpl in Hin. contradiction.
+    + rewrite extract_arb_cycles_RTree_cons in Hin.
+      apply in_app_iff in Hin.
+      destruct Hin as [Hin | Hin].
+      * exact (IH ch c Hin).
+      * exact (IHrest c Hin).
+Qed.
+
+(** Every chain that survives [validate_deltas] has
+    strictly positive gross delta at its origin. *)
+Lemma validate_deltas_positive :
+  forall cs c, In c (validate_deltas cs) ->
+    (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z.
+Proof.
+  intros cs c Hin.
+  unfold validate_deltas in Hin.
+  apply filter_In in Hin as [_ Hgt].
+  apply Z.gtb_lt in Hgt. apply Z.lt_gt. exact Hgt.
+Qed.
+
+(** Validate-Deltas is conservative: filtering
+    cannot introduce new chains. *)
+Lemma validate_deltas_subset :
+  forall cs c, In c (validate_deltas cs) -> In c cs.
+Proof.
+  intros cs c Hin.
+  unfold validate_deltas in Hin.
+  apply filter_In in Hin as [Hin _]. exact Hin.
+Qed.
+
+(** Main theorem: the OCaml pipeline's
+    Extract-and-Recover composed with Validate-Deltas
+    produces a list of cycles each satisfying
+    [validated_arbitrage].  This closes the
+    "premises supplied externally" gap in
+    [soundness_end_to_end]: the [Forall
+    validated_arbitrage] hypothesis is now derivable
+    from a Rocq-modeled pipeline rather than assumed. *)
+Theorem validate_deltas_sound :
+  forall t,
+    Forall validated_arbitrage
+           (validate_deltas (extract_arb_cycles t)).
+Proof.
+  intros t.
+  apply Forall_forall.
+  intros c Hin.
+  unfold validated_arbitrage. split.
+  - apply (extract_arb_cycles_labeled t c).
+    apply (validate_deltas_subset _ c Hin).
+  - apply (validate_deltas_positive _ c Hin).
+Qed.
+
 (** compute_reasons: produces the reason list from
     the reduced AST state, mirroring
     eval_semantics_arbitrage_analysis in the
@@ -1259,6 +1370,41 @@ Proof.
          Hclass (fun _ => Hnonempty) Hvalid)
       as [_ Hex].
     exact Hex.
+Qed.
+
+(** End-to-end soundness over a tree, with the
+    pipeline's filtered cycle list derived rather
+    than assumed.  When [classify] declares
+    VArbitrage and the tree contains at least one
+    arbitrage cycle that survives delta validation,
+    that cycle satisfies Definition 4
+    ([validated_arbitrage]).  This closes the
+    "premises supplied externally" gap in
+    [soundness_end_to_end]: the [Forall
+    validated_arbitrage] hypothesis is now derivable
+    from a Rocq-modeled pipeline rather than assumed. *)
+Corollary soundness_end_to_end_tree :
+  forall t has_left final_neg final_mixed,
+    classify
+      (compute_reasons (has_arb_cycles t) has_left
+         final_neg final_mixed) = VArbitrage ->
+    validate_deltas (extract_arb_cycles t) <> [] ->
+    (has_arb_cycles t = true /\ has_left = false /\
+     final_neg = false /\ final_mixed = false) /\
+    exists c, In c (validate_deltas (extract_arb_cycles t))
+              /\ validated_arbitrage c.
+Proof.
+  intros t hl fn fm Hclass Hnonempty.
+  pose proof (validate_deltas_sound t) as Hall.
+  split.
+  - exact (arbitrage_implies_clean_ast _ _ _ _ Hclass).
+  - destruct (validate_deltas (extract_arb_cycles t))
+      as [| c rest] eqn:Eq;
+      [contradiction|].
+    exists c. split.
+    + left; reflexivity.
+    + rewrite Forall_forall in Hall.
+      apply Hall. left; reflexivity.
 Qed.
 
 (** The implementation's annotate_and_reduce is a
@@ -2723,6 +2869,19 @@ Proof.
   - eapply FSD_step. exact Hstep. apply IH. exact H23.
 Qed.
 
+(** Theorem 5: Decidable structural equivalence
+    (for fixed Routers).
+
+    Two reduced CFTs are joinable under the fixpoint
+    step iff their unique normal forms coincide.
+    The equivalence is implicitly parameterized by
+    the file-level [is_singleton_router] Parameter:
+    R5 (router-chain) and the merge guards depend
+    on it, so two analysts running with different
+    Routers configurations would produce different
+    canonical forms.  Within a single extraction
+    (or, equivalently, a fixed Routers registry),
+    the equivalence is decidable. *)
 Theorem decidable_equivalence :
   forall from_ (T1 T2 Nf1 Nf2 : reduced_cft),
     nf from_ T1 Nf1 ->
