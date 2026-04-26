@@ -474,6 +474,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_destination c' = ch_destination c ->
       ch_token_in c' = ch_token_in c ->
       ch_token_out c' = ch_token_out c ->
+      is_labeled (ch_label c) = false ->
       is_labeled (ch_label c') = true ->
       (forall t, In t (chain_transfers c') ->
                  In t (chain_transfers c)) ->
@@ -738,7 +739,7 @@ Proof.
       apply in_app_iff.
       destruct Hin0 as [Hin0 | Hin0].
       - left. exact Hin0.
-      - right. exact (H6 t0 Hin0). }
+      - right. exact (H7 t0 Hin0). }
     exact (Hgoal t Hin).
 Qed.
 
@@ -2838,6 +2839,133 @@ Proof.
   pose proof (unlabeled_le_transfers t).
   pose proof (cc_plus2_le_twice_ct t Hfl Hne).
   lia.
+Qed.
+
+(* ============================================================
+   Section 13b: Termination of the declarative rewrite_step
+   (Phase 2 + Phase 3 combined)
+
+   The fixpoint termination above ([fixpoint_terminates])
+   covers only the deterministic Phase-3 step
+   ([fixpoint_step_rel]).  Phase 2 (leaf manipulation
+   rules R1--R10 and lift) is also strongly normalizing
+   under the lex measure
+   ([count_children], [count_unlabeled]):
+   every Phase-2 rule strictly reduces the total
+   children count, while [RS_annotate] preserves it
+   and reduces [count_unlabeled].
+   ============================================================ *)
+
+Definition measure_phase2 (t : reduced_cft) : nat * nat :=
+  (count_children t, count_unlabeled t).
+
+(** Standard list_sum_app, proved locally to avoid
+    relying on a particular stdlib name. *)
+Lemma list_sum_app :
+  forall (l1 l2 : list nat),
+    list_sum (l1 ++ l2) = list_sum l1 + list_sum l2.
+Proof.
+  induction l1 as [|h rest IH]; intros l2; simpl;
+    [reflexivity | rewrite IH; lia].
+Qed.
+
+(** Closed-form count_children of an RTree. *)
+Lemma cc_RTree_sum :
+  forall a children,
+    count_children (RTree a children) =
+    length children +
+    list_sum (map count_children children).
+Proof.
+  intros. simpl. rewrite fold_to_sum. lia.
+Qed.
+
+(** Closed-form count_unlabeled of an RTree. *)
+Lemma cu_RTree_sum :
+  forall a children,
+    count_unlabeled (RTree a children) =
+    list_sum (map count_unlabeled children).
+Proof.
+  intros. simpl. rewrite fold_to_sum. lia.
+Qed.
+
+Theorem rewrite_step_decreases :
+  forall t1 t2, rewrite_step t1 t2 ->
+                lt_lex (measure_phase2 t2)
+                       (measure_phase2 t1).
+Proof.
+  intros t1 t2 Hstep.
+  unfold measure_phase2, lt_lex.
+  inversion Hstep; subst.
+  - (* RS_swap_chain (R1) *)
+    left. simpl. lia.
+  - (* RS_burn_chain (R2) *)
+    left. simpl. lia.
+  - (* RS_mint_chain (R3) *)
+    left. simpl. lia.
+  - (* RS_pool_cycle (R4) *)
+    left. simpl. lia.
+  - (* RS_router_chain (R5) *)
+    left. simpl. lia.
+  - (* RS_leaf_chain (R6/R11) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_chain_seq (R9) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_same_token_chain (R10) *)
+    left. simpl. lia.
+  - (* RS_lift *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl.
+    rewrite !fold_to_sum. lia.
+  - (* RS_merge (R7/R8/R12) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_annotate (R13/R14) *)
+    right. split.
+    + (* count_children unchanged *)
+      rewrite !cc_RTree_sum, !length_app, !map_app,
+              !list_sum_app. simpl. lia.
+    + (* count_unlabeled strictly drops:
+         c is unlabeled, c' is labeled. *)
+      rewrite !cu_RTree_sum, !map_app, !list_sum_app.
+      simpl. rewrite H5, H6. simpl. lia.
+Qed.
+
+Lemma rewrite_step_wf :
+  well_founded (fun t' t => rewrite_step t t').
+Proof.
+  intro T.
+  remember (measure_phase2 T) as m eqn:Hm.
+  revert T Hm.
+  induction m as [m IH]
+    using (well_founded_induction lt_lex_wf).
+  intros T Hm. constructor. intros T' Hstep.
+  apply (IH (measure_phase2 T')).
+  - subst. exact (rewrite_step_decreases T T' Hstep).
+  - reflexivity.
+Qed.
+
+(** Strong-normalization (constructive form): there
+    are no infinite [rewrite_step]-chains.  Equivalent
+    to [Acc]-based well-foundedness; we expose it
+    explicitly so that the termination claim is
+    quotable by reviewers without unpacking
+    [well_founded].  Constructive: no excluded middle. *)
+Theorem rewrite_step_terminating :
+  forall (seq : nat -> reduced_cft),
+    (forall n, rewrite_step (seq n) (seq (S n))) -> False.
+Proof.
+  intros seq Hstep.
+  pose proof (rewrite_step_wf (seq 0)) as Hacc.
+  remember 0 as i eqn:Hi. clear Hi.
+  revert i Hacc Hstep.
+  fix IH 2.
+  intros i Hacc Hstep.
+  inversion Hacc as [Hin]. clear Hacc.
+  apply (IH (S i)).
+  - apply Hin. exact (Hstep i).
+  - intros n. exact (Hstep n).
 Qed.
 
 (* ============================================================
