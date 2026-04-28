@@ -12,7 +12,9 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 128 lemmas/theorems, 0 axioms, 0 Admitted.
+    Statistics: 128 lemmas/theorems (5 headline Theorems
+    matching paper R1-R5 + 120 Lemmas + 3 Corollaries),
+    0 axioms, 0 Admitted.
     Rewriting rules: 15 constructors, one per rule
     R1--R14 from Table 1.  R15 (post-rewriting validation)
     is modeled by the [validated_arbitrage] predicate.
