@@ -50,6 +50,23 @@ Parameter token_eq_dec :
     (e.g., ETH and WETH on Ethereum). *)
 Parameter token_equiv : token -> token -> bool.
 
+(** Deployment well-formedness for [token_equiv].
+
+    Stated as a [Prop], not an [Axiom]: soundness holds for any boolean
+    instantiation, but a sensible deployment satisfies these properties.
+    A deployer can discharge this separately for their concrete
+    instantiation; the rewriting and soundness proofs do not depend on
+    it. Reflexivity is non-negotiable in deployment (a token is the same
+    as itself); symmetry is the natural closure of "wrapped-pair"
+    relations like ETH/WETH; transitivity is *not* assumed because
+    real-world equivalence is a thin layer (ETH ≡ WETH does not extend
+    transitively to bridged or pegged tokens. Those are price-oracle
+    territory, handled outside the canonical layer). *)
+Definition is_token_equiv_well_formed
+    (eq : token -> token -> bool) : Prop :=
+  (forall t, eq t t = true) /\
+  (forall t1 t2, eq t1 t2 = eq t2 t1).
+
 Definition amount := nat.
 
 (* ============================================================
@@ -81,6 +98,11 @@ Parameter is_singleton_router : address -> bool.
    Section 3: Cash Flow Tree (Definition 2)
    ============================================================ *)
 
+(* The [list cft] children in [Tree] is load-bearing.
+   Property 1 (DSE) is encoded structurally as
+   ordered children, not declared as an [Axiom].
+   A [multiset] children would force critical-pair
+   analysis on the rewriting; the list does not. *)
 Inductive cft : Type :=
   | Leaf : transfer -> cft
   | Tree : address -> list cft -> cft.
@@ -755,13 +777,10 @@ Proof.
     exact (IH t Hin).
 Qed.
 
-(** The termination theorem applies to the FIXPOINT
-    loop (Algorithm 2: Annotate-and-Reduce), which
-    only uses RS_merge and RS_annotate_cycle.
-    RS_chain and RS_lift belong to the leaf
-    manipulation phase (Algorithm 1), which terminates
-    by a separate argument (bottom-up, bounded by
-    tree depth).
+(** [fixpoint_terminates] below covers the Phase-3
+    fixpoint (annotate + merge); see Section 13b
+    for [rewrite_step_terminating], the Phase-2
+    counterpart added in revision.
 
     We first define the helper functions that
     construct the result of each step, then define
@@ -1634,16 +1653,10 @@ Proof.
       subst. auto.
 Qed.
 
-(** THEOREM: Determinism of the fixpoint step.
-
-    Each constructor of fixpoint_step_rel decomposes
-    the children list as siblings ++ suffix where
-    suffix has a FIXED length (1 for annotate,
-    2 for merge/merge_unlabeled).  Since a list can be
-    decomposed into prefix ++ suffix in exactly
-    one way for a given suffix length, two steps
-    from the same tree must operate on the same
-    children and produce the same result. *)
+(** Helper: every [fixpoint_step_rel] step from an
+    [RTree] produces an [RTree].  By inversion on
+    the relation -- all four constructors yield
+    [RTree addr (siblings ++ [...])]. *)
 Lemma fixpoint_step_same_tree :
   forall from_ addr children T',
     fixpoint_step_rel from_ (RTree addr children) T' ->
@@ -2267,19 +2280,13 @@ Qed.
 (* ============================================================
    Section 11e: step_fn relational characterization
 
-   This section closes the declarative-vs-computable
-   gap by giving step_fn an explicit relational form
-   [step_fn_rel] and proving step_fn refines it.
-   The relational form decomposes one step_fn call
-   into its two phases (annotation pass + one merge),
-   making the implementation structure visible.
-   We then prove that step_fn_rel preserves the same
-   invariants as the declarative rewrite_step
-   (transfer-set inclusion and lex measure decrease),
-   establishing the formal bridge in the form
-   [step_fn from_ T = Some T' -> step_fn_rel from_ T T']
-   that was missing in the previous version of the
-   mechanization.
+   Bridge between the declarative spec [rewrite_step]
+   and the computable [step_fn]: an explicit relation
+   [step_fn_rel] decomposing one [step_fn] call into
+   its two phases (annotation + one merge), with
+   proofs that [step_fn] refines it and preserves the
+   same invariants (transfer-set inclusion + lex
+   measure decrease).
    ============================================================ *)
 
 (** Relabeling preserves the chain's transfer list. *)
@@ -2750,8 +2757,9 @@ Fixpoint fully_lifted (t : reduced_cft) : bool :=
     accumulator management.  I state it and use it
     for the 3n bound; the list induction is the
     standard Handshaking Lemma for trees. *)
-(** Convert fold_left to plain arithmetic so lia
-    can handle the bound. *)
+(** [lia] chokes on [fold_left]; convert to
+    [list_sum (map f l)] so it can see arithmetic.
+    Used throughout this file. *)
 Lemma fold_to_sum :
   forall (f : reduced_cft -> nat) l init,
     fold_left (fun a c => a + f c) l init =
@@ -2858,6 +2866,13 @@ Qed.
 
 Definition measure_phase2 (t : reduced_cft) : nat * nat :=
   (count_children t, count_unlabeled t).
+(* Note: order is (count_children, count_unlabeled),
+   swapped from Phase 3's [measure].  Phase-2 leaf
+   rules can INCREASE count_unlabeled (R1: two
+   RLeafs contribute 0; the Chaining RChain output
+   contributes 1).  So count_unlabeled can't be the
+   primary; count_children is what monotonically
+   drops. *)
 
 (** Standard list_sum_app, proved locally to avoid
     relying on a particular stdlib name. *)
@@ -2969,34 +2984,23 @@ Proof.
 Qed.
 
 (* ============================================================
-   Section 13c: Phase-2 confluence via determinism
+   Section 13c: Phase-2 confluence -- the function magic
 
-   Following the same template as Phase 3
-   ([step_fn], [confluence]): we expose a
-   deterministic Phase-2 step function
-   ([phase2_step_fn]) covering the leaf-pair rules
-   (R1--R5, R10).  The function picks a canonical
-   priority order R5 > R2 > R3 > R4 > R10 > R1
-   among overlapping preconditions, mirroring
-   Property~\ref{prop:dse} (DSE) in the paper.
+   Same trick as Phase 3: pick a deterministic step
+   function, get determinism for free, confluence as
+   a corollary.  No critical-pair analysis on the
+   relational [rewrite_step] (which has overlapping
+   LHSs at the leaf-pair level -- R5 vs R10 on a
+   same-token router pair).
 
-   We prove:
-   - [phase2_step_fn_det]:  determinism (trivial,
-     it is a function);
-   - [phase2_step_fn_sound]: soundness w.r.t.
-     [rewrite_step] (every step the function takes
-     is a step the spec allows);
-   - [phase2_step_fn_decreases]: termination via
-     [measure_phase2];
-   - [phase2_confluence]: the function's
-     normal forms are unique (immediate from
-     determinism, mirrors [confluence] for Phase 3).
+   Priority order R5 > R2 > R3 > R4 > R10 > R1 is
+   one valid choice among several; the paper claims
+   convergence under this scheduling, not under the
+   relation.  See section 3.5.
 
-   Completeness w.r.t. the relational [rewrite_step]
-   is intentionally not claimed -- the spec is
-   non-deterministic and the function realizes one
-   canonical reduction strategy, the same scope as
-   [step_fn] for Phase 3. ============================================================ *)
+   Completeness w.r.t. [rewrite_step] not claimed.
+   Same scope as [step_fn] for Phase 3.
+   ============================================================ *)
 
 (** Canonical leaf-pair chain (Chaining/Burn/Mint):
     same shape regardless of which rule fires. *)
@@ -3020,9 +3024,12 @@ Definition pool_cycle_chain
           (CT_transfer t1) (CT_transfer t2).
 
 (** Deterministic leaf-pair combiner.  Priority
-    order R5 > R2 > R3 > R4 > R10 > R1 fixes a
-    canonical choice when multiple rule
-    preconditions hold for the same adjacent pair. *)
+    R5 > R2 > R3 > R4 > R10 > R1.  R5 first because
+    singleton routers are unambiguous; R1 last
+    because [chainable] is the most general -- only
+    fires when nothing more specific does.  Other
+    orders would also work; this one matches the
+    OCaml pipeline. *)
 Definition try_combine_leaves
     (t1 t2 : transfer) : option chain_tree :=
   if address_eq_dec (tr_dest t1) (tr_source t2) then
