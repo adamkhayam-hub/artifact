@@ -12,7 +12,7 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 129 lemmas/theorems, 0 axioms, 0 Admitted.
+    Statistics: 128 lemmas/theorems, 0 axioms, 0 Admitted.
     Rewriting rules: 15 constructors, one per rule
     R1--R14 from Table 1.  R15 (post-rewriting validation)
     is modeled by the [validated_arbitrage] predicate.
@@ -682,7 +682,7 @@ Proof.
   try (destruct H as [H1 [H2 [H3 H4]]]; discriminate).
 Qed.
 
-Theorem classify_no_false_reasons :
+Lemma classify_no_false_reasons :
   forall reasons,
     classify reasons = VArbitrage ->
     ~ In NoCycles reasons /\
@@ -752,20 +752,6 @@ Proof.
   intros c' H. simpl. rewrite H. reflexivity.
 Qed.
 
-(** Chaining produces a Chaining-labeled node,
-    which is unlabeled. *)
-Lemma chain_label :
-  forall t1 t2,
-    ch_label (CT_node (tr_source t1) (tr_dest t2)
-      [tr_dest t1] (tr_token t1) (tr_token t2)
-      t1 (fun _ _ => 0%Z) Chaining
-      (CT_transfer t1) (CT_transfer t2)) = Chaining.
-Proof. reflexivity. Qed.
-
-(** All is_labeled facts are trivial by reflexivity.
-    Use [simpl; reflexivity] or [destruct (is_labeled _)]
-    directly at call sites. *)
-
 (* ============================================================
    Section 10: Main Theorems
    ============================================================ *)
@@ -788,7 +774,7 @@ Proof.
   - rewrite IH, app_assoc. reflexivity.
 Qed.
 
-Theorem preservation_step :
+Lemma preservation_step :
   forall T0 Tf,
     rewrite_step T0 Tf ->
     forall t, In t (rcft_transfers Tf) ->
@@ -888,7 +874,7 @@ Proof.
     + right. rewrite H7 in Hin. exact Hin.
 Qed.
 
-Theorem preservation :
+Lemma preservation :
   forall T0 Tf,
     rewrite_star T0 Tf ->
     forall t, In t (rcft_transfers Tf) ->
@@ -927,11 +913,6 @@ Qed.
     (consecutive transfers chain at an address). *)
 Definition chain_walk (c : chain_tree) : Prop :=
   valid_walk (chain_transfers c).
-
-(** A single transfer is trivially a valid walk. *)
-Lemma chain_walk_transfer :
-  forall t, chain_walk (CT_transfer t).
-Proof. intros. unfold chain_walk. simpl. exact I. Qed.
 
 (** A two-leaf chain is a valid walk iff its leaves chain. *)
 Lemma chain_walk_two :
@@ -997,27 +978,6 @@ Proof.
   intros. subst. apply chain_walk_two. assumption.
 Qed.
 
-(** R4: Pool cycle.  Both endpoint chains satisfy the
-    walk requirement, so the constructed chain is a
-    valid walk (and, since [tr_dest t2 = tr_source t1],
-    also a cycle). *)
-Lemma chain_walk_pool_cycle :
-  forall t1 t2 c (addr : address),
-    tr_dest t1 = tr_source t2 ->
-    tr_dest t2 = tr_source t1 ->
-    tr_sender t1 <> tr_dest t1 ->
-    c = CT_node (tr_source t1) (tr_dest t1)
-                [tr_dest t1]
-                (tr_token t1) (tr_token t2)
-                t1
-                (fun _ _ => 0%Z)
-                Cycle
-                (CT_transfer t1) (CT_transfer t2) ->
-    chain_walk c.
-Proof.
-  intros. subst. apply chain_walk_two. assumption.
-Qed.
-
 (** R5: Singleton router chain. *)
 Lemma chain_walk_router :
   forall t1 t2 c (addr : address),
@@ -1051,48 +1011,6 @@ Lemma chain_walk_same_token :
     chain_walk c.
 Proof.
   intros. subst. apply chain_walk_two. assumption.
-Qed.
-
-(** Walk correspondence for the leaf-pair construction rules.
-
-    Any rewrite step that takes [RTree addr [RLeaf t1; RLeaf t2]]
-    to [RTree addr [RChain c]] produces a chain [c] whose leaves
-    form a valid walk.  The proof inverts on the step and
-    dispatches to the per-rule lemma above. *)
-Theorem leaf_pair_walk_correspondence :
-  forall addr t1 t2 c,
-    rewrite_step
-      (RTree addr [RLeaf t1; RLeaf t2])
-      (RTree addr [RChain c]) ->
-    chain_walk c.
-Proof.
-  intros addr t1 t2 c Hstep.
-  inversion Hstep; subst.
-  - (* RS_swap_chain (R1).  chainable gives the endpoint. *)
-    destruct H1 as [Hch _]. apply chain_walk_two. exact Hch.
-  - (* RS_burn_chain (R2) *) apply chain_walk_two. assumption.
-  - (* RS_mint_chain (R3) *) apply chain_walk_two. assumption.
-  - (* RS_pool_cycle (R4) *) apply chain_walk_two. assumption.
-  - (* RS_router_chain (R5) *) apply chain_walk_two. assumption.
-  - (* RS_leaf_chain (R6).  Input has [RLeaf t; RChain c]. *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_node_leaf_chain (R11).  Same. *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_chain_seq (R9).  Input has [RChain c1; RChain c2]. *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_same_token_chain (R10) *) apply chain_walk_two. assumption.
-  - (* RS_lift.  Input is [RTree addr children], not two leaves. *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_merge_endpoints (R7) *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_merge_add (R8) *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_merge_node (R12) *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_annotate_arb (R13) *)
-    destruct siblings; simpl in *; congruence.
-  - (* RS_annotate_cyc (R14) *)
-    destruct siblings; simpl in *; congruence.
 Qed.
 
 (* ============================================================
@@ -1130,13 +1048,6 @@ Proof.
   exists [chain_transfers c]. split.
   - constructor; [exact Hcw | constructor].
   - simpl. rewrite app_nil_r. reflexivity.
-Qed.
-
-(** A single transfer is a singleton walk in a singleton walk-set. *)
-Lemma chain_walks_transfer :
-  forall t, chain_walks (CT_transfer t).
-Proof.
-  intros. apply chain_walk_implies_walks. apply chain_walk_transfer.
 Qed.
 
 (** Walk-set concat: two chain-walks-decomposable chains, when
@@ -1216,17 +1127,6 @@ Fixpoint rcft_chains (T : reduced_cft) : list chain_tree :=
 Definition walks_in_rcft (T : reduced_cft) : Prop :=
   Forall chain_walks (rcft_chains T).
 
-(** Sibling-list distribution: walks-in for an [RTree] over a
-    concatenation splits into the two parts. *)
-Lemma walks_in_rcft_RTree_app :
-  forall a l1 l2,
-    walks_in_rcft (RTree a (l1 ++ l2)) <->
-    walks_in_rcft (RTree a l1) /\ walks_in_rcft (RTree a l2).
-Proof.
-  intros a l1 l2. unfold walks_in_rcft. simpl.
-  rewrite flat_map_app. rewrite Forall_app. reflexivity.
-Qed.
-
 (** Walk-set preservation under one rewrite step: chains in the
     rewritten tree continue to decompose into walk-sets in the
     original transfer graph.  Each rule contributes a
@@ -1249,7 +1149,7 @@ Lemma flat_map_rcft_chains_app :
     flat_map rcft_chains l1 ++ flat_map rcft_chains l2.
 Proof. intros. apply flat_map_app. Qed.
 
-Theorem walk_correspondence_step :
+Lemma walk_correspondence_step :
   forall T0 Tf,
     rewrite_step T0 Tf ->
     walks_in_rcft T0 ->
@@ -1343,7 +1243,7 @@ Qed.
 
 (** Reflexive--transitive closure: walk-set decomposition is
     preserved by any number of rewriting steps. *)
-Theorem walk_correspondence :
+Lemma walk_correspondence :
   forall T0 Tf,
     rewrite_star T0 Tf ->
     walks_in_rcft T0 ->
@@ -1353,19 +1253,6 @@ Proof.
   - intros; assumption.
   - intros Hwalks. apply IH.
     apply (walk_correspondence_step T1 T2 Hstep Hwalks).
-Qed.
-
-(** Initial state: a tree of pure leaves trivially has the
-    walk-set property (each leaf is fine; no chains yet). *)
-Lemma walks_in_rcft_initial :
-  forall addr leaves,
-    Forall (fun T => match T with RLeaf _ => True | _ => False end) leaves ->
-    walks_in_rcft (RTree addr leaves).
-Proof.
-  intros addr leaves Hleaves. unfold walks_in_rcft. simpl.
-  induction Hleaves as [|x rest Hx Hrest IH].
-  - constructor.
-  - destruct x; try contradiction. simpl. apply IH.
 Qed.
 
 (** [fixpoint_terminates] below covers the Phase-3
@@ -1587,7 +1474,7 @@ Qed.
 
 (** MAIN THEOREM: each fixpoint step strictly
     decreases the lexicographic measure. *)
-Theorem fixpoint_step_decreases :
+Lemma fixpoint_step_decreases :
   forall from_ T T',
     fixpoint_step_rel from_ T T' ->
     lt_lex (measure T') (measure T).
@@ -1625,7 +1512,7 @@ Qed.
 (** Theorem 3: Soundness.
     The classify function returning VArbitrage implies
     the absence of verdict-determining reasons. *)
-Theorem soundness_reasons :
+Lemma soundness_reasons :
   forall reasons,
     classify reasons = VArbitrage ->
     ~ In NoCycles reasons /\
@@ -1658,7 +1545,7 @@ Definition validated_arbitrage (c : chain_tree) : Prop :=
     at least one validated arbitrage cycle.
     This bridges the gap between the syntactic
     classify and the semantic Definition 4. *)
-Theorem soundness_full :
+Lemma soundness_full :
   forall reasons cycles,
     classify reasons = VArbitrage ->
     (* NoCycles not in R means cycles is nonempty *)
@@ -1818,7 +1705,7 @@ Qed.
     [soundness_end_to_end]: the [Forall
     validated_arbitrage] hypothesis is now derivable
     from a Rocq-modeled pipeline rather than assumed. *)
-Theorem validate_deltas_sound :
+Lemma validate_deltas_sound :
   forall t,
     Forall validated_arbitrage
            (validate_deltas (extract_arb_cycles t)).
@@ -1879,7 +1766,7 @@ Qed.
     has leftovers, the verdict cannot be Arbitrage.
     This matches the implementation: leftovers =>
     Cftar_leftover_transaction => Warning. *)
-Theorem leftovers_prevent_arbitrage :
+Lemma leftovers_prevent_arbitrage :
   forall has_cyc final_neg final_mixed,
     classify
       (compute_reasons has_cyc true final_neg final_mixed)
@@ -1896,7 +1783,7 @@ Qed.
 (** Converse: VArbitrage implies no leftovers in
     the reduced AST (when reasons are computed
     from the AST state). *)
-Theorem arbitrage_implies_no_leftovers :
+Lemma arbitrage_implies_no_leftovers :
   forall has_cyc has_left final_neg final_mixed,
     classify
       (compute_reasons has_cyc has_left
@@ -1913,7 +1800,7 @@ Qed.
 (** Full connection: VArbitrage from compute_reasons
     implies cycles exist AND no leftovers AND
     final balance is not negative or mixed. *)
-Theorem arbitrage_implies_clean_ast :
+Lemma arbitrage_implies_clean_ast :
   forall has_cyc has_left final_neg final_mixed,
     classify
       (compute_reasons has_cyc has_left
@@ -2334,7 +2221,7 @@ Definition fixpoint_step_det
     (from_ : address) (T T' : reduced_cft) : Prop :=
   step_fn from_ T = Some T'.
 
-Theorem fixpoint_step_det_deterministic :
+Lemma fixpoint_step_det_deterministic :
   forall from_ T T1 T2,
     fixpoint_step_det from_ T T1 ->
     fixpoint_step_det from_ T T2 ->
@@ -2793,7 +2680,7 @@ Qed.
 (** Termination of the deterministic fixpoint.
     Constructive proof by case analysis on the
     option result of [step_fn]. *)
-Theorem fixpoint_terminates :
+Lemma fixpoint_terminates :
   forall from_ (T0 : reduced_cft),
     exists Tf, fixpoint_star_det from_ T0 Tf /\
                (forall T', ~ fixpoint_step_det from_ Tf T').
@@ -2841,7 +2728,7 @@ Proof.
       subst. exact (IH T2 H0 Hnf1 Hnf2).
 Qed.
 
-Theorem confluence :
+Lemma confluence :
   forall from_ (T0 Tf1 Tf2 : reduced_cft),
     fixpoint_star_det from_ T0 Tf1 ->
     fixpoint_star_det from_ T0 Tf2 ->
@@ -3129,7 +3016,7 @@ Qed.
 
 (** The classify cascade is complete: these are the
     only four reasons that prevent VArbitrage. *)
-Theorem classify_complete :
+Lemma classify_complete :
   forall reasons,
     classify reasons <> VArbitrage ->
     In NoCycles reasons \/
@@ -3427,7 +3314,7 @@ Qed.
 (** The 3n termination bound:
     u₀ ≤ n (proved) and c₀ ≤ 2n-2 ≤ 2n (stated).
     Combined: u₀ + c₀ ≤ 3n. *)
-Theorem termination_bound :
+Lemma termination_bound :
   forall t,
     fully_lifted t = true ->
     non_empty t = true ->
@@ -3494,7 +3381,7 @@ Proof.
   intros. simpl. rewrite fold_to_sum. lia.
 Qed.
 
-Theorem rewrite_step_decreases :
+Lemma rewrite_step_decreases :
   forall t1 t2, rewrite_step t1 t2 ->
                 lt_lex (measure_phase2 t2)
                        (measure_phase2 t1).
@@ -3576,7 +3463,7 @@ Qed.
     explicitly so that the termination claim is
     quotable by reviewers without unpacking
     [well_founded].  Constructive: no excluded middle. *)
-Theorem rewrite_step_terminating :
+Lemma rewrite_step_terminating :
   forall (seq : nat -> reduced_cft),
     (forall n, rewrite_step (seq n) (seq (S n))) -> False.
 Proof.
@@ -3688,7 +3575,7 @@ Proof.
 Qed.
 
 (** Soundness: every function-step is a spec-step. *)
-Theorem phase2_step_fn_sound :
+Lemma phase2_step_fn_sound :
   forall t t',
     phase2_step_fn t = Some t' ->
     rewrite_step t t'.
@@ -3791,7 +3678,7 @@ Qed.
 (** Phase-2 confluence (mirrors [confluence] for
     Phase 3): two normal forms reachable from the
     same term coincide.  Immediate from determinism. *)
-Theorem phase2_confluence :
+Lemma phase2_confluence :
   forall T0 Tf1 Tf2,
     phase2_star_det T0 Tf1 ->
     phase2_star_det T0 Tf2 ->
@@ -3844,7 +3731,7 @@ Qed.
     canonical forms.  Within a single extraction
     (or, equivalently, a fixed Routers registry),
     the equivalence is decidable. *)
-Theorem decidable_equivalence :
+Lemma decidable_equivalence :
   forall from_ (T1 T2 Nf1 Nf2 : reduced_cft),
     nf from_ T1 Nf1 ->
     nf from_ T2 Nf2 ->
@@ -3867,6 +3754,90 @@ Proof.
   - (* Nf1 = Nf2 -> joinable *)
     intros Heq. subst Nf2.
     exists Nf1. split. apply Hstar1. apply Hstar2. (* split; assumption.*)
+Qed.
+
+(* ============================================================
+   Section 14b: Headline theorems (1:1 with paper Table)
+
+   The five theorems of the paper, each stated as a single
+   Rocq Theorem.  All supporting results above are Lemmas.
+   ============================================================ *)
+
+(** Theorem 1 (Preservation): every transfer chain in the
+    reduced AST corresponds to a walk-set in the original
+    transfer graph, and every transfer in the reduced AST is
+    present in the input trace.  Combines walk-correspondence
+    with transfer-set inclusion. *)
+Theorem theorem_1_preservation :
+  forall T0 Tf,
+    rewrite_star T0 Tf ->
+    walks_in_rcft T0 ->
+    walks_in_rcft Tf /\
+    (forall t, In t (rcft_transfers Tf) ->
+               In t (rcft_transfers T0)).
+Proof.
+  intros T0 Tf Hstar Hwalks. split.
+  - exact (walk_correspondence T0 Tf Hstar Hwalks).
+  - exact (preservation T0 Tf Hstar).
+Qed.
+
+(** Theorem 2 (Termination): the deterministic fixpoint
+    reaches a normal form for any starting tree.  The
+    [termination_bound] lemma gives the [3n] bound on the
+    initial measure. *)
+Theorem theorem_2_termination :
+  forall from_ T0,
+    exists Tf,
+      fixpoint_star_det from_ T0 Tf /\
+      (forall T', ~ fixpoint_step_det from_ Tf T').
+Proof.
+  exact fixpoint_terminates.
+Qed.
+
+(** Theorem 3 (Soundness): an [Arbitrage] verdict implies the
+    structural conditions hold AND every cycle on the validated
+    list is a [validated_arbitrage] (gross delta > 0 at the
+    cycle's origin).  The economic conjunct ([Delta_net > 0]
+    after gas) is paper-level, see Definition 5. *)
+Theorem theorem_3_soundness :
+  forall t has_left final_neg final_mixed,
+    classify
+      (compute_reasons (has_arb_cycles t) has_left
+         final_neg final_mixed) = VArbitrage ->
+    validate_deltas (extract_arb_cycles t) <> [] ->
+    (has_arb_cycles t = true /\ has_left = false /\
+     final_neg = false /\ final_mixed = false) /\
+    exists c, In c (validate_deltas (extract_arb_cycles t))
+              /\ validated_arbitrage c.
+Proof.
+  exact soundness_end_to_end_tree.
+Qed.
+
+(** Theorem 4 (Confluence): every starting tree has a unique
+    normal form under the deterministic fixpoint.  Phase 2 is
+    confluent separately ([phase2_confluence]); together they
+    cover both rewriting phases. *)
+Theorem theorem_4_confluence :
+  forall from_ (T0 Tf1 Tf2 : reduced_cft),
+    fixpoint_star_det from_ T0 Tf1 ->
+    fixpoint_star_det from_ T0 Tf2 ->
+    (forall T', ~ fixpoint_step_det from_ Tf1 T') ->
+    (forall T', ~ fixpoint_step_det from_ Tf2 T') ->
+    Tf1 = Tf2.
+Proof.
+  exact confluence.
+Qed.
+
+(** Theorem 5 (Decidable equivalence): joinability under the
+    deterministic fixpoint is decidable, and equivalent to
+    equality of normal forms. *)
+Theorem theorem_5_decidable_equivalence :
+  forall from_ (T1 T2 Nf1 Nf2 : reduced_cft),
+    nf from_ T1 Nf1 ->
+    nf from_ T2 Nf2 ->
+    (joinable from_ T1 T2 <-> Nf1 = Nf2).
+Proof.
+  exact decidable_equivalence.
 Qed.
 
 (* ============================================================
