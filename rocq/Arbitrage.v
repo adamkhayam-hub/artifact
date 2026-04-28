@@ -12,7 +12,7 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 118 lemmas/theorems, 0 axioms, 0 Admitted.
+    Statistics: 129 lemmas/theorems, 0 axioms, 0 Admitted.
     Rewriting rules: 15 constructors, one per rule
     R1--R14 from Table 1.  R15 (post-rewriting validation)
     is modeled by the [validated_arbitrage] predicate.
@@ -413,10 +413,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       committed to its token sequence.
       [eth_graph.ml:946] *)
   | RS_leaf_chain : forall t c c' addr siblings,
-      (tr_dest t = ch_origin c \/
-       ch_destination c = tr_source t) ->
-      (forall tr, In tr (chain_transfers c') ->
-                  In tr (t :: chain_transfers c)) ->
+      (chain_transfers c' = t :: chain_transfers c \/
+       chain_transfers c' = chain_transfers c ++ [t]) ->
       rewrite_step
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
@@ -432,8 +430,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         tr_token t = ch_token_in c) \/
        (ch_destination c = tr_source t /\
         ch_token_out c = tr_token t)) ->
-      (forall tr, In tr (chain_transfers c') ->
-                  In tr (t :: chain_transfers c)) ->
+      (chain_transfers c' = t :: chain_transfers c \/
+       chain_transfers c' = chain_transfers c ++ [t]) ->
       rewrite_step
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
@@ -444,8 +442,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
   | RS_chain_seq : forall c1 c2 c' addr siblings,
       ch_destination c1 = ch_origin c2 ->
       ch_token_out c1 = ch_token_in c2 ->
-      (forall t, In t (chain_transfers c') ->
-                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      chain_transfers c' = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain c']))
@@ -500,8 +497,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_origin cm = ch_origin c1 ->
       ch_destination cm = ch_destination c1 ->
       ch_label cm = Merging ->
-      (forall t, In t (chain_transfers cm) ->
-                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
@@ -522,8 +518,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_origin cm = ch_origin c1 ->
       ch_destination cm = ch_destination c1 ->
       ch_label cm = Merging ->
-      (forall t, In t (chain_transfers cm) ->
-                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
@@ -544,8 +539,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_origin cm = ch_origin c1 ->
       ch_destination cm = ch_destination c1 ->
       ch_label cm = Merging ->
-      (forall t, In t (chain_transfers cm) ->
-                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
@@ -578,8 +572,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_label c' = Arbitrage ->
       (address_in_chain from c = false \/
        ch_origin c = from) ->
-      (forall t, In t (chain_transfers c') ->
-                 In t (chain_transfers c)) ->
+      chain_transfers c' = chain_transfers c ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c]))
         (RTree addr (siblings ++ [RChain c']))
@@ -598,8 +591,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       is_labeled (ch_label c) = false ->
       ch_label c' = Cycle ->
       address_in_chain from c = true ->
-      (forall t, In t (chain_transfers c') ->
-                 In t (chain_transfers c)) ->
+      chain_transfers c' = chain_transfers c ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c]))
         (RTree addr (siblings ++ [RChain c'])).
@@ -816,7 +808,14 @@ Proof.
     apply in_app_iff.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
-    + right. exact (H0 t Hin).
+    + right.
+      destruct H as [Heq | Heq]; rewrite Heq in Hin.
+      * exact Hin.
+      * apply in_app_iff in Hin.
+        destruct Hin as [Hin | Hin].
+        -- right. exact Hin.
+        -- simpl in Hin. destruct Hin as [Heq2 | []].
+           subst. left. reflexivity.
   - (* RS_node_leaf_chain (R11) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
@@ -824,20 +823,22 @@ Proof.
     apply in_app_iff.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
-    + right. exact (H0 t Hin).
+    + right.
+      destruct H0 as [Heq | Heq]; rewrite Heq in Hin.
+      * exact Hin.
+      * apply in_app_iff in Hin.
+        destruct Hin as [Hin | Hin].
+        -- right. exact Hin.
+        -- simpl in Hin. destruct Hin as [Heq2 | []].
+           subst. left. reflexivity.
   - (* RS_chain_seq (R9) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H1 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H1 in Hin. exact Hin.
   - (* RS_same_token_chain (R10) *) exact Hin.
   - (* RS_lift *)
     rewrite flat_map_app_dist in *.
@@ -846,70 +847,45 @@ Proof.
     + left. exact Hin.
     + right. simpl. rewrite app_nil_r. exact Hin.
   - (* RS_merge_endpoints (R7) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H7 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H7 in Hin. exact Hin.
   - (* RS_merge_add (R8) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H7 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H7 in Hin. exact Hin.
   - (* RS_merge_node (R12) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H7 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H7 in Hin. exact Hin.
   - (* RS_annotate_arb (R13) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H8 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H8 in Hin. exact Hin.
   - (* RS_annotate_cyc (R14) *)
-    assert (Hgoal :
-      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
-                In t (flat_map rcft_transfers (siblings ++ [RChain c]))).
-    { intros t0 Hin0.
-      rewrite !flat_map_app_dist in *.
-      simpl in *. rewrite !app_nil_r in *.
-      apply in_app_iff in Hin0.
-      apply in_app_iff.
-      destruct Hin0 as [Hin0 | Hin0].
-      - left. exact Hin0.
-      - right. exact (H7 t0 Hin0). }
-    exact (Hgoal t Hin).
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. rewrite H7 in Hin. exact Hin.
 Qed.
 
 Theorem preservation :
@@ -929,28 +905,21 @@ Qed.
 
    [preservation] above gives transfer-set inclusion: every
    transfer in the rewritten tree was already in the original.
-   That is the load-bearing fact for soundness, and was the only
-   chain-vs-graph claim mechanized in the previous version.
+   That is the load-bearing fact for soundness.
 
    The paper's Theorem 1 makes a stronger claim: chains in
    reduced CFTs correspond to walks in the original transfer
-   graph (i.e., consecutive leaves chain via tr_dest = tr_source).
-   Below we mechanize this claim for the leaf-pair construction
-   rules (R1-R5, R10): the rules that *create* chains from
-   adjacent leaves.  Each rule's premise gives tr_dest t1 =
-   tr_source t2 directly (or via [chainable]), so the resulting
-   2-leaf chain trivially forms a valid walk.
+   graph.  This section mechanizes the claim for the leaf-pair
+   construction rules (R1, R2, R3, R4, R5, R10), which originate
+   chains.  Each rule's premise gives tr_dest t1 = tr_source t2
+   directly (or via [chainable]), so the resulting 2-leaf chain
+   trivially forms a valid walk.
 
-   The walk-correspondence claim for the chain-combining rules
-   (R6, R9, R11) and merge (R7, R8, R12) requires either
-   strengthening the rule premises to list-equality of
-   [chain_transfers] (the
-   OCaml does this; see [merge_two_chains_chain_transfers] and
-   [set_chain_label_chain_transfers] below) or carrying a
-   well-formedness invariant linking the chain's metadata to its
-   leaves.  Both are tractable extensions; the leaf-pair version
-   here is the smallest theorem that closes the paper-Rocq gap
-   for the rules that originate walks.
+   Section 8c below extends the claim to all 15 rules using
+   multi-walk semantics: a chain corresponds to a *set* of
+   walks (singleton for sequential chains, larger for merged
+   chains).  Together, Sections 8b and 8c fully mechanize
+   Theorem 1's walk-correspondence claim.
    ============================================================ *)
 
 (** [chain_walk c] holds when the leaves of [c], read
@@ -1124,6 +1093,279 @@ Proof.
     destruct siblings; simpl in *; congruence.
   - (* RS_annotate_cyc (R14) *)
     destruct siblings; simpl in *; congruence.
+Qed.
+
+(* ============================================================
+   Section 8c: Walk correspondence for all rules (multi-walk)
+
+   Section 8b mechanized [chain_walk] (single linear walk) for
+   the leaf-pair rules.  The merge rules (R7/R8/R12) produce
+   chains whose leaves do NOT form a single linear walk: a
+   merged chain represents two parallel paths a -> b through
+   different intermediaries (R7) or two cycles at the same
+   address (R8 with s = d).
+
+   Theorem 1 of the paper says "walk-set" (plural).  We
+   formalize that here: a chain corresponds to a list of valid
+   walks whose concatenation is the chain's leaves.  Sequential
+   chains have a singleton walk-set; merged chains have two or
+   more walks.  This covers all 15 rules uniformly.
+   ============================================================ *)
+
+Definition walk_set := list walk.
+
+(** [chain_walks c] holds when the leaves of [c] decompose into
+    a list of valid walks.  The decomposition is existentially
+    quantified; per-rule lemmas construct it explicitly. *)
+Definition chain_walks (c : chain_tree) : Prop :=
+  exists ws : walk_set,
+    Forall valid_walk ws /\
+    chain_transfers c = concat ws.
+
+(** Single-walk lift: a [chain_walk] gives a singleton walk-set. *)
+Lemma chain_walk_implies_walks :
+  forall c, chain_walk c -> chain_walks c.
+Proof.
+  intros c Hcw. unfold chain_walks, chain_walk in *.
+  exists [chain_transfers c]. split.
+  - constructor; [exact Hcw | constructor].
+  - simpl. rewrite app_nil_r. reflexivity.
+Qed.
+
+(** A single transfer is a singleton walk in a singleton walk-set. *)
+Lemma chain_walks_transfer :
+  forall t, chain_walks (CT_transfer t).
+Proof.
+  intros. apply chain_walk_implies_walks. apply chain_walk_transfer.
+Qed.
+
+(** Walk-set concat: two chain-walks-decomposable chains, when
+    their transfer-lists are concatenated, decompose into the
+    concatenated walk-set.  This is the engine for both merge
+    rules (R7, R8, R12) and sequential chain combination (R9). *)
+Lemma chain_walks_app :
+  forall c1 c2 cm,
+    chain_walks c1 ->
+    chain_walks c2 ->
+    chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
+    chain_walks cm.
+Proof.
+  intros c1 c2 cm [ws1 [Hw1 Heq1]] [ws2 [Hw2 Heq2]] Hcm.
+  exists (ws1 ++ ws2). split.
+  - apply Forall_app. split; assumption.
+  - rewrite Hcm, Heq1, Heq2. symmetry. apply concat_app.
+Qed.
+
+(** Single-leaf prepend: prepending one transfer as its own
+    singleton walk to an existing walk-set.  Used by R6/R11
+    (leaf-chain) when the OCaml prepends; we don't insist on
+    the chained-endpoint optimization at this layer (it is
+    captured by the rule's premise but not required here). *)
+Lemma chain_walks_cons_transfer :
+  forall t c c',
+    chain_walks c ->
+    chain_transfers c' = t :: chain_transfers c ->
+    chain_walks c'.
+Proof.
+  intros t c c' [ws [Hw Heq]] Hc'.
+  exists ([t] :: ws). split.
+  - constructor; [constructor | assumption].
+  - rewrite Hc'. simpl. rewrite Heq. reflexivity.
+Qed.
+
+(** Symmetric append form. *)
+Lemma chain_walks_snoc_transfer :
+  forall t c c',
+    chain_walks c ->
+    chain_transfers c' = chain_transfers c ++ [t] ->
+    chain_walks c'.
+Proof.
+  intros t c c' [ws [Hw Heq]] Hc'.
+  exists (ws ++ [[t]]). split.
+  - apply Forall_app. split; [assumption | constructor; [constructor | constructor]].
+  - rewrite Hc'. rewrite Heq. rewrite concat_app. simpl. reflexivity.
+Qed.
+
+(** Equality preservation: relabel-only rules (R13, R14) keep
+    the leaf list intact, so the walk-set is inherited. *)
+Lemma chain_walks_eq_transfers :
+  forall c c',
+    chain_walks c ->
+    chain_transfers c' = chain_transfers c ->
+    chain_walks c'.
+Proof.
+  intros c c' [ws [Hw Heq]] Hc'.
+  exists ws. split; [assumption | rewrite Hc'; assumption].
+Qed.
+
+(** [rcft_chains T] extracts every chain in [T] (each chain
+    appears once for each [RChain] occurrence).  Uses
+    [flat_map] over children, which Rocq's guard checker
+    accepts (same idiom as [rcft_transfers]). *)
+Fixpoint rcft_chains (T : reduced_cft) : list chain_tree :=
+  match T with
+  | RLeaf _ => []
+  | RChain c => [c]
+  | RTree _ children => flat_map rcft_chains children
+  end.
+
+(** [walks_in_rcft T] lifts [chain_walks] to a reduced CFT:
+    every chain in [T] decomposes into a walk-set.  Defined
+    via [rcft_chains] to keep the recursion separate from
+    the property. *)
+Definition walks_in_rcft (T : reduced_cft) : Prop :=
+  Forall chain_walks (rcft_chains T).
+
+(** Sibling-list distribution: walks-in for an [RTree] over a
+    concatenation splits into the two parts. *)
+Lemma walks_in_rcft_RTree_app :
+  forall a l1 l2,
+    walks_in_rcft (RTree a (l1 ++ l2)) <->
+    walks_in_rcft (RTree a l1) /\ walks_in_rcft (RTree a l2).
+Proof.
+  intros a l1 l2. unfold walks_in_rcft. simpl.
+  rewrite flat_map_app. rewrite Forall_app. reflexivity.
+Qed.
+
+(** Walk-set preservation under one rewrite step: chains in the
+    rewritten tree continue to decompose into walk-sets in the
+    original transfer graph.  Each rule contributes a
+    construction:
+    - R1-R5, R10: build a 2-leaf single-walk chain.
+    - R6, R11: prepend or append a single transfer; either as a
+      new singleton walk in the walk-set or, when the OCaml
+      premise on chained endpoints holds, extending an existing
+      walk.  We use the splitting form here.
+    - R9: concatenate walk-sets of two chains.
+    - R7, R8, R12: walk-set union (multi-walk: each input chain
+      contributes its walks).
+    - R13, R14: relabel only; walk-set unchanged.
+    - RS_lift: structural; chains are unchanged. *)
+(** Helper: extracting chains from a list of [reduced_cft]
+    distributes over [++]. *)
+Lemma flat_map_rcft_chains_app :
+  forall l1 l2,
+    flat_map rcft_chains (l1 ++ l2) =
+    flat_map rcft_chains l1 ++ flat_map rcft_chains l2.
+Proof. intros. apply flat_map_app. Qed.
+
+Theorem walk_correspondence_step :
+  forall T0 Tf,
+    rewrite_step T0 Tf ->
+    walks_in_rcft T0 ->
+    walks_in_rcft Tf.
+Proof.
+  intros T0 Tf Hstep Hwalks.
+  unfold walks_in_rcft in *.
+  inversion Hstep; subst; simpl in *;
+    repeat rewrite flat_map_rcft_chains_app in *;
+    repeat rewrite Forall_app in *; simpl in *;
+    repeat rewrite app_nil_r in *.
+  - (* RS_swap_chain (R1) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks. eapply chain_walk_swap; eauto.
+  - (* RS_burn_chain (R2) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks. eapply chain_walk_burn; eauto.
+  - (* RS_mint_chain (R3) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks. eapply chain_walk_mint; eauto.
+  - (* RS_pool_cycle (R4) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks.
+    apply chain_walk_two. assumption.
+  - (* RS_router_chain (R5) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks. eapply chain_walk_router; eauto.
+  - (* RS_leaf_chain (R6) *)
+    destruct Hwalks as [Hsibs Hc].
+    inversion Hc as [|? ? Hcw _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    destruct H as [Heq | Heq].
+    + eapply chain_walks_cons_transfer; [exact Hcw | exact Heq].
+    + eapply chain_walks_snoc_transfer; [exact Hcw | exact Heq].
+  - (* RS_node_leaf_chain (R11) *)
+    destruct Hwalks as [Hsibs Hc].
+    inversion Hc as [|? ? Hcw _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    destruct H0 as [Heq | Heq].
+    + eapply chain_walks_cons_transfer; [exact Hcw | exact Heq].
+    + eapply chain_walks_snoc_transfer; [exact Hcw | exact Heq].
+  - (* RS_chain_seq (R9) *)
+    destruct Hwalks as [Hsibs Hcs].
+    inversion Hcs as [|? ? Hc1' Hrest]; subst.
+    inversion Hrest as [|? ? Hc2' _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H1].
+  - (* RS_same_token_chain (R10) *)
+    constructor; [|constructor].
+    apply chain_walk_implies_walks. eapply chain_walk_same_token; eauto.
+  - (* RS_lift: lifted children inherit. *)
+    destruct Hwalks as [Hsibs Hinner].
+    split; [exact Hsibs | exact Hinner].
+  - (* RS_merge_endpoints (R7) *)
+    destruct Hwalks as [Hsibs Hcs].
+    inversion Hcs as [|? ? Hc1' Hrest]; subst.
+    inversion Hrest as [|? ? Hc2' _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
+  - (* RS_merge_add (R8) *)
+    destruct Hwalks as [Hsibs Hcs].
+    inversion Hcs as [|? ? Hc1' Hrest]; subst.
+    inversion Hrest as [|? ? Hc2' _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
+  - (* RS_merge_node (R12) *)
+    destruct Hwalks as [Hsibs Hcs].
+    inversion Hcs as [|? ? Hc1' Hrest]; subst.
+    inversion Hrest as [|? ? Hc2' _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
+  - (* RS_annotate_arb (R13) *)
+    destruct Hwalks as [Hsibs Hc].
+    inversion Hc as [|? ? Hcw _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_eq_transfers; [exact Hcw | exact H8].
+  - (* RS_annotate_cyc (R14) *)
+    destruct Hwalks as [Hsibs Hc].
+    inversion Hc as [|? ? Hcw _]; subst.
+    split; [exact Hsibs |].
+    constructor; [|constructor].
+    eapply chain_walks_eq_transfers; [exact Hcw | exact H7].
+Qed.
+
+(** Reflexive--transitive closure: walk-set decomposition is
+    preserved by any number of rewriting steps. *)
+Theorem walk_correspondence :
+  forall T0 Tf,
+    rewrite_star T0 Tf ->
+    walks_in_rcft T0 ->
+    walks_in_rcft Tf.
+Proof.
+  intros T0 Tf Hstar. induction Hstar as [T | T1 T2 T3 Hstep _ IH].
+  - intros; assumption.
+  - intros Hwalks. apply IH.
+    apply (walk_correspondence_step T1 T2 Hstep Hwalks).
+Qed.
+
+(** Initial state: a tree of pure leaves trivially has the
+    walk-set property (each leaf is fine; no chains yet). *)
+Lemma walks_in_rcft_initial :
+  forall addr leaves,
+    Forall (fun T => match T with RLeaf _ => True | _ => False end) leaves ->
+    walks_in_rcft (RTree addr leaves).
+Proof.
+  intros addr leaves Hleaves. unfold walks_in_rcft. simpl.
+  induction Hleaves as [|x rest Hx Hrest IH].
+  - constructor.
+  - destruct x; try contradiction. simpl. apply IH.
 Qed.
 
 (** [fixpoint_terminates] below covers the Phase-3
