@@ -777,6 +777,198 @@ Proof.
     exact (IH t Hin).
 Qed.
 
+(* ============================================================
+   Section 8b: Walk correspondence (Theorem 1, walk part)
+
+   [preservation] above gives transfer-set inclusion: every
+   transfer in the rewritten tree was already in the original.
+   That is the load-bearing fact for soundness, and was the only
+   chain-vs-graph claim mechanized in the previous version.
+
+   The paper's Theorem 1 makes a stronger claim: chains in
+   reduced CFTs correspond to walks in the original transfer
+   graph (i.e., consecutive leaves chain via tr_dest = tr_source).
+   Below we mechanize this claim for the leaf-pair construction
+   rules (R1-R5, R10) — the rules that *create* chains from
+   adjacent leaves.  Each rule's premise gives tr_dest t1 =
+   tr_source t2 directly (or via [chainable]), so the resulting
+   2-leaf chain trivially forms a valid walk.
+
+   The walk-correspondence claim for the chain-combining rules
+   (R6, R9) and merge (R7/R8/R12) requires either strengthening
+   the rule premises to list-equality of [chain_transfers] (the
+   OCaml does this; see [merge_two_chains_chain_transfers] and
+   [set_chain_label_chain_transfers] below) or carrying a
+   well-formedness invariant linking the chain's metadata to its
+   leaves.  Both are tractable extensions; the leaf-pair version
+   here is the smallest theorem that closes the paper-Rocq gap
+   for the rules that originate walks.
+   ============================================================ *)
+
+(** [chain_walk c] holds when the leaves of [c], read
+    left-to-right, form a valid walk in the transfer graph
+    (consecutive transfers chain at an address). *)
+Definition chain_walk (c : chain_tree) : Prop :=
+  valid_walk (chain_transfers c).
+
+(** A single transfer is trivially a valid walk. *)
+Lemma chain_walk_transfer :
+  forall t, chain_walk (CT_transfer t).
+Proof. intros. unfold chain_walk. simpl. exact I. Qed.
+
+(** A two-leaf chain is a valid walk iff its leaves chain. *)
+Lemma chain_walk_two :
+  forall t1 t2 o d m ti to_ ft delta lbl,
+    tr_dest t1 = tr_source t2 ->
+    chain_walk
+      (CT_node o d m ti to_ ft delta lbl
+               (CT_transfer t1) (CT_transfer t2)).
+Proof.
+  intros. unfold chain_walk. simpl. split; auto.
+Qed.
+
+(** R1: Swap chain — chainable t1 t2 gives tr_dest t1 =
+    tr_source t2, so the constructed 2-leaf chain is a walk. *)
+Lemma chain_walk_swap :
+  forall t1 t2 c (addr : address),
+    chainable t1 t2 ->
+    c = CT_node (tr_source t1) (tr_dest t2)
+                [tr_dest t1]
+                (tr_token t1) (tr_token t2)
+                t1
+                (fun _ _ => 0%Z)
+                Chaining
+                (CT_transfer t1) (CT_transfer t2) ->
+    chain_walk c.
+Proof.
+  intros t1 t2 c addr [Hch _] Hc. subst.
+  apply chain_walk_two. exact Hch.
+Qed.
+
+(** R2: Burn chain. *)
+Lemma chain_walk_burn :
+  forall t_burn t c (addr : address),
+    is_burn t_burn = true ->
+    tr_dest t_burn = tr_source t ->
+    c = CT_node (tr_source t_burn) (tr_dest t)
+                [tr_dest t_burn]
+                (tr_token t_burn) (tr_token t)
+                t_burn
+                (fun _ _ => 0%Z)
+                TokenBurn
+                (CT_transfer t_burn) (CT_transfer t) ->
+    chain_walk c.
+Proof.
+  intros. subst. apply chain_walk_two. assumption.
+Qed.
+
+(** R3: Mint chain. *)
+Lemma chain_walk_mint :
+  forall t t_mint c (addr : address),
+    is_mint t_mint = true ->
+    tr_dest t = tr_source t_mint ->
+    c = CT_node (tr_source t) (tr_dest t_mint)
+                [tr_dest t]
+                (tr_token t) (tr_token t_mint)
+                t
+                (fun _ _ => 0%Z)
+                TokenMint
+                (CT_transfer t) (CT_transfer t_mint) ->
+    chain_walk c.
+Proof.
+  intros. subst. apply chain_walk_two. assumption.
+Qed.
+
+(** R4: Pool cycle — both endpoint chains satisfy the walk
+    requirement, so the constructed chain is a valid walk
+    (and, since tr_dest t2 = tr_source t1, also a cycle). *)
+Lemma chain_walk_pool_cycle :
+  forall t1 t2 c (addr : address),
+    tr_dest t1 = tr_source t2 ->
+    tr_dest t2 = tr_source t1 ->
+    tr_sender t1 <> tr_dest t1 ->
+    c = CT_node (tr_source t1) (tr_dest t1)
+                [tr_dest t1]
+                (tr_token t1) (tr_token t2)
+                t1
+                (fun _ _ => 0%Z)
+                Cycle
+                (CT_transfer t1) (CT_transfer t2) ->
+    chain_walk c.
+Proof.
+  intros. subst. apply chain_walk_two. assumption.
+Qed.
+
+(** R5: Singleton router chain. *)
+Lemma chain_walk_router :
+  forall t1 t2 c (addr : address),
+    tr_dest t1 = tr_source t2 ->
+    tr_token t1 = tr_token t2 ->
+    is_singleton_router (tr_dest t1) = true ->
+    c = CT_node (tr_source t1) (tr_dest t2)
+                [tr_dest t1]
+                (tr_token t1) (tr_token t2)
+                t1
+                (fun _ _ => 0%Z)
+                Chaining
+                (CT_transfer t1) (CT_transfer t2) ->
+    chain_walk c.
+Proof.
+  intros. subst. apply chain_walk_two. assumption.
+Qed.
+
+(** R10: Same-token leaf chain. *)
+Lemma chain_walk_same_token :
+  forall t1 t2 c (addr : address),
+    tr_dest t1 = tr_source t2 ->
+    tr_token t1 = tr_token t2 ->
+    c = CT_node (tr_source t1) (tr_dest t2)
+                [tr_dest t1]
+                (tr_token t1) (tr_token t2)
+                t1
+                (fun _ _ => 0%Z)
+                Chaining
+                (CT_transfer t1) (CT_transfer t2) ->
+    chain_walk c.
+Proof.
+  intros. subst. apply chain_walk_two. assumption.
+Qed.
+
+(** Walk correspondence for the leaf-pair construction rules.
+
+    Any rewrite step that takes [RTree addr [RLeaf t1; RLeaf t2]]
+    to [RTree addr [RChain c]] produces a chain [c] whose leaves
+    form a valid walk.  The proof inverts on the step and
+    dispatches to the per-rule lemma above. *)
+Theorem leaf_pair_walk_correspondence :
+  forall addr t1 t2 c,
+    rewrite_step
+      (RTree addr [RLeaf t1; RLeaf t2])
+      (RTree addr [RChain c]) ->
+    chain_walk c.
+Proof.
+  intros addr t1 t2 c Hstep.
+  inversion Hstep; subst.
+  - (* RS_swap_chain (R1) — chainable gives the endpoint *)
+    destruct H1 as [Hch _]. apply chain_walk_two. exact Hch.
+  - (* RS_burn_chain (R2) *) apply chain_walk_two. assumption.
+  - (* RS_mint_chain (R3) *) apply chain_walk_two. assumption.
+  - (* RS_pool_cycle (R4) *) apply chain_walk_two. assumption.
+  - (* RS_router_chain (R5) *) apply chain_walk_two. assumption.
+  - (* RS_leaf_chain (R6/R11) — input shape rules this out:
+       requires [RLeaf t; RChain c], not [RLeaf t1; RLeaf t2]. *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_chain_seq (R9) — same: input has [RChain c1; RChain c2]. *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_same_token_chain (R10) *) apply chain_walk_two. assumption.
+  - (* RS_lift — input is [RTree addr children], not two leaves. *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_merge — input has [RChain c1; RChain c2]. *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_annotate — input has [RChain c]. *)
+    destruct siblings; simpl in *; congruence.
+Qed.
+
 (** [fixpoint_terminates] below covers the Phase-3
     fixpoint (annotate + merge); see Section 13b
     for [rewrite_step_terminating], the Phase-2
