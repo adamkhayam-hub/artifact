@@ -12,9 +12,10 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 109 lemmas/theorems, 0 axioms, 0 Admitted.
-    Rewriting rules: 11 constructors covering
-    all 15 rules from Table 1 (R1--R15).
+    Statistics: 118 lemmas/theorems, 0 axioms, 0 Admitted.
+    Rewriting rules: 15 constructors, one per rule
+    R1--R14 from Table 1.  R15 (post-rewriting validation)
+    is modeled by the [validated_arbitrage] predicate.
     Compile: opam exec -- rocq compile Arbitrage.v
 
     Author: [anonymous]
@@ -305,14 +306,9 @@ Definition chainable (t1 t2 : transfer) : Prop :=
 
 (** The rewriting rules correspond one-to-one to
     Table 1 in the paper.  Each constructor is
-    annotated with its rule number (R1--R15).
-    Rules with identical structural effect share
-    a constructor:
-      R6/R11 -> RS_leaf_chain,
-      R7/R8/R12 -> RS_merge,
-      R13/R14 -> RS_annotate.
-    R15 (validation) is modeled by the
-    [validated_arbitrage] predicate below. *)
+    annotated with its rule number (R1--R14).
+    R15 (post-rewriting validation) is modeled by
+    the [validated_arbitrage] predicate below. *)
 
 Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
   (* ---- Leaf manipulation (R1--R5) ----
@@ -410,10 +406,32 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
      Chain a leaf with an existing chain, or
      chain two sequential chains. *)
 
-  (** R6: Leaf--chain chaining.  A leaf adjacent
-      to an existing chain.  [eth_graph.ml:946--981]
-      Also covers R11 (node-level leaf--chain). *)
+  (** R6: leaf chaining onto an existing chain, within
+      a single Chain construction.  Address adjacency
+      is enough; no token check, because we are inside
+      the same call frame and the chain has already
+      committed to its token sequence.
+      [eth_graph.ml:946] *)
   | RS_leaf_chain : forall t c c' addr siblings,
+      (tr_dest t = ch_origin c \/
+       ch_destination c = tr_source t) ->
+      (forall tr, In tr (chain_transfers c') ->
+                  In tr (t :: chain_transfers c)) ->
+      rewrite_step
+        (RTree addr (siblings ++ [RLeaf t; RChain c]))
+        (RTree addr (siblings ++ [RChain c']))
+
+  (** R11: same shape as R6, but applied across call
+      frames.  Crossing a call boundary, the token has
+      to match the chain's endpoint token; otherwise
+      we would conflate two distinct asset flows.  The
+      token continuity check is what distinguishes R11
+      from R6. *)
+  | RS_node_leaf_chain : forall t c c' addr siblings,
+      ((tr_dest t = ch_origin c /\
+        tr_token t = ch_token_in c) \/
+       (ch_destination c = tr_source t /\
+        ch_token_out c = tr_token t)) ->
       (forall tr, In tr (chain_transfers c') ->
                   In tr (t :: chain_transfers c)) ->
       rewrite_step
@@ -466,14 +484,19 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
 
   (* ---- Endpoint merge (R7, R8, R12) ---- *)
 
-  (** R7: Merge (s!=d, different tau_in).
-      R8: Merge-add (s=d, all tokens match).
-      R12: Node-level merge.
-      [eth_graph.ml:990--1075,
-       eth_arbitrage.ml:136--148] *)
-  | RS_merge : forall c1 c2 cm addr siblings,
+  (** R7: endpoint merge.  Two chains share the same
+      source and destination (with s != d), the output
+      tokens agree, but the input tokens differ.  The
+      merge collapses two parallel paths through
+      different intermediaries into one structure
+      (typical multi-hop arbitrage shape).
+      [eth_graph.ml:990] *)
+  | RS_merge_endpoints : forall c1 c2 cm addr siblings,
       ch_origin c1 = ch_origin c2 ->
       ch_destination c1 = ch_destination c2 ->
+      ch_origin c1 <> ch_destination c1 ->
+      ch_token_out c1 = ch_token_out c2 ->
+      ch_token_in c1 <> ch_token_in c2 ->
       ch_origin cm = ch_origin c1 ->
       ch_destination cm = ch_destination c1 ->
       ch_label cm = Merging ->
@@ -483,13 +506,68 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
 
-  (* ---- Annotation (R13, R14) ---- *)
+  (** R8: cycle merge-add.  Both chains are cycles at
+      the same address (s = d), and all four tokens
+      match.  Since the chains have identical shape,
+      merging amounts to summing their amounts.  This
+      is the additive case, distinct from R7 because
+      it operates on cycles rather than on parallel
+      paths.  [eth_graph.ml:1046] *)
+  | RS_merge_add : forall c1 c2 cm addr siblings,
+      ch_origin c1 = ch_origin c2 ->
+      ch_destination c1 = ch_destination c2 ->
+      ch_origin c1 = ch_destination c1 ->
+      ch_token_in c1 = ch_token_in c2 ->
+      ch_token_out c1 = ch_token_out c2 ->
+      ch_origin cm = ch_origin c1 ->
+      ch_destination cm = ch_destination c1 ->
+      ch_label cm = Merging ->
+      (forall t, In t (chain_transfers cm) ->
+                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      rewrite_step
+        (RTree addr (siblings ++ [RChain c1; RChain c2]))
+        (RTree addr (siblings ++ [RChain cm]))
 
-  (** R13: Arbitrage annotation (from notin C
-      or s(C) = from).
-      R14: Cycle annotation (from in C).
-      [eth_tools.ml:1265--1322] *)
-  | RS_annotate : forall c c' addr siblings,
+  (** R12: node-level merge.  A single token end-to-end
+      in both chains (no token swap on either side),
+      with the same source and destination addresses.
+      This is the same-token structural variant of
+      merge: useful when two chains carry the same
+      asset without any conversion.
+      [eth_arbitrage.ml:136] *)
+  | RS_merge_node : forall c1 c2 cm addr siblings,
+      ch_origin c1 = ch_origin c2 ->
+      ch_destination c1 = ch_destination c2 ->
+      ch_token_in c1 = ch_token_out c1 ->
+      ch_token_in c1 = ch_token_in c2 ->
+      ch_token_out c1 = ch_token_out c2 ->
+      ch_origin cm = ch_origin c1 ->
+      ch_destination cm = ch_destination c1 ->
+      ch_label cm = Merging ->
+      (forall t, In t (chain_transfers cm) ->
+                 In t (chain_transfers c1 ++ chain_transfers c2)) ->
+      rewrite_step
+        (RTree addr (siblings ++ [RChain c1; RChain c2]))
+        (RTree addr (siblings ++ [RChain cm]))
+
+  (* ---- Annotation (R13, R14) ----
+     Both rules see the transaction sender [from].
+     The split on whether [from] is inside or outside
+     the cycle is semantic, not cosmetic: R13 says
+     an external orchestrator captured value (we call
+     this Arbitrage), R14 says the cycle was driven
+     by a contract sitting inside it (we call this
+     Cycle, but not Arbitrage in our sense).  This is
+     why R13 and R14 never compete on the same input:
+     the [from] condition partitions the cases.
+     [eth_tools.ml:1265] *)
+
+  (** R13: Arbitrage label.  s(C) = d(C), tokens match
+      modulo =_tau, and the orchestrator [from] is
+      either outside the cycle or equal to its source.
+      This is the EOA-initiated case, where an external
+      account captured the round-trip value. *)
+  | RS_annotate_arb : forall c c' addr siblings (from : address),
       ch_origin c = ch_destination c ->
       ch_token_in c = ch_token_out c ->
       ch_origin c' = ch_origin c ->
@@ -497,7 +575,29 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_token_in c' = ch_token_in c ->
       ch_token_out c' = ch_token_out c ->
       is_labeled (ch_label c) = false ->
-      is_labeled (ch_label c') = true ->
+      ch_label c' = Arbitrage ->
+      (address_in_chain from c = false \/
+       ch_origin c = from) ->
+      (forall t, In t (chain_transfers c') ->
+                 In t (chain_transfers c)) ->
+      rewrite_step
+        (RTree addr (siblings ++ [RChain c]))
+        (RTree addr (siblings ++ [RChain c']))
+
+  (** R14: Cycle label.  s(C) = d(C) and [from] sits
+      inside the cycle.  We do not claim arbitrage
+      here: a contract took the round trip, but the
+      value capture is internal to the cycle and not
+      extracted by an external orchestrator. *)
+  | RS_annotate_cyc : forall c c' addr siblings (from : address),
+      ch_origin c = ch_destination c ->
+      ch_origin c' = ch_origin c ->
+      ch_destination c' = ch_destination c ->
+      ch_token_in c' = ch_token_in c ->
+      ch_token_out c' = ch_token_out c ->
+      is_labeled (ch_label c) = false ->
+      ch_label c' = Cycle ->
+      address_in_chain from c = true ->
       (forall t, In t (chain_transfers c') ->
                  In t (chain_transfers c)) ->
       rewrite_step
@@ -709,14 +809,22 @@ Proof.
   - (* RS_mint_chain (R3) *) exact Hin.
   - (* RS_pool_cycle (R4) *) exact Hin.
   - (* RS_router_chain (R5) *) exact Hin.
-  - (* RS_leaf_chain (R6/R11) *)
+  - (* RS_leaf_chain (R6) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
     apply in_app_iff.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
-    + right. exact (H t Hin).
+    + right. exact (H0 t Hin).
+  - (* RS_node_leaf_chain (R11) *)
+    rewrite !flat_map_app_dist in *.
+    simpl in *. rewrite !app_nil_r in *.
+    apply in_app_iff in Hin.
+    apply in_app_iff.
+    destruct Hin as [Hin | Hin].
+    + left. exact Hin.
+    + right. exact (H0 t Hin).
   - (* RS_chain_seq (R9) *)
     assert (Hgoal :
       forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
@@ -737,7 +845,7 @@ Proof.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
     + right. simpl. rewrite app_nil_r. exact Hin.
-  - (* RS_merge (R7/R8/R12) *)
+  - (* RS_merge_endpoints (R7) *)
     assert (Hgoal :
       forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
                 In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
@@ -748,9 +856,48 @@ Proof.
       apply in_app_iff.
       destruct Hin0 as [Hin0 | Hin0].
       - left. exact Hin0.
-      - right. exact (H4 t0 Hin0). }
+      - right. exact (H7 t0 Hin0). }
     exact (Hgoal t Hin).
-  - (* RS_annotate (R13/R14) *)
+  - (* RS_merge_add (R8) *)
+    assert (Hgoal :
+      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
+                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
+    { intros t0 Hin0.
+      rewrite !flat_map_app_dist in *.
+      simpl in *. rewrite !app_nil_r in *.
+      apply in_app_iff in Hin0.
+      apply in_app_iff.
+      destruct Hin0 as [Hin0 | Hin0].
+      - left. exact Hin0.
+      - right. exact (H7 t0 Hin0). }
+    exact (Hgoal t Hin).
+  - (* RS_merge_node (R12) *)
+    assert (Hgoal :
+      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain cm])) ->
+                In t (flat_map rcft_transfers (siblings ++ [RChain c1; RChain c2]))).
+    { intros t0 Hin0.
+      rewrite !flat_map_app_dist in *.
+      simpl in *. rewrite !app_nil_r in *.
+      apply in_app_iff in Hin0.
+      apply in_app_iff.
+      destruct Hin0 as [Hin0 | Hin0].
+      - left. exact Hin0.
+      - right. exact (H7 t0 Hin0). }
+    exact (Hgoal t Hin).
+  - (* RS_annotate_arb (R13) *)
+    assert (Hgoal :
+      forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
+                In t (flat_map rcft_transfers (siblings ++ [RChain c]))).
+    { intros t0 Hin0.
+      rewrite !flat_map_app_dist in *.
+      simpl in *. rewrite !app_nil_r in *.
+      apply in_app_iff in Hin0.
+      apply in_app_iff.
+      destruct Hin0 as [Hin0 | Hin0].
+      - left. exact Hin0.
+      - right. exact (H8 t0 Hin0). }
+    exact (Hgoal t Hin).
+  - (* RS_annotate_cyc (R14) *)
     assert (Hgoal :
       forall t, In t (flat_map rcft_transfers (siblings ++ [RChain c'])) ->
                 In t (flat_map rcft_transfers (siblings ++ [RChain c]))).
@@ -789,14 +936,15 @@ Qed.
    reduced CFTs correspond to walks in the original transfer
    graph (i.e., consecutive leaves chain via tr_dest = tr_source).
    Below we mechanize this claim for the leaf-pair construction
-   rules (R1-R5, R10) — the rules that *create* chains from
+   rules (R1-R5, R10): the rules that *create* chains from
    adjacent leaves.  Each rule's premise gives tr_dest t1 =
    tr_source t2 directly (or via [chainable]), so the resulting
    2-leaf chain trivially forms a valid walk.
 
    The walk-correspondence claim for the chain-combining rules
-   (R6, R9) and merge (R7/R8/R12) requires either strengthening
-   the rule premises to list-equality of [chain_transfers] (the
+   (R6, R9, R11) and merge (R7, R8, R12) requires either
+   strengthening the rule premises to list-equality of
+   [chain_transfers] (the
    OCaml does this; see [merge_two_chains_chain_transfers] and
    [set_chain_label_chain_transfers] below) or carrying a
    well-formedness invariant linking the chain's metadata to its
@@ -827,8 +975,9 @@ Proof.
   intros. unfold chain_walk. simpl. split; auto.
 Qed.
 
-(** R1: Swap chain — chainable t1 t2 gives tr_dest t1 =
-    tr_source t2, so the constructed 2-leaf chain is a walk. *)
+(** R1: Swap chain.  [chainable t1 t2] gives
+    [tr_dest t1 = tr_source t2], so the constructed
+    2-leaf chain is a walk. *)
 Lemma chain_walk_swap :
   forall t1 t2 c (addr : address),
     chainable t1 t2 ->
@@ -879,9 +1028,10 @@ Proof.
   intros. subst. apply chain_walk_two. assumption.
 Qed.
 
-(** R4: Pool cycle — both endpoint chains satisfy the walk
-    requirement, so the constructed chain is a valid walk
-    (and, since tr_dest t2 = tr_source t1, also a cycle). *)
+(** R4: Pool cycle.  Both endpoint chains satisfy the
+    walk requirement, so the constructed chain is a
+    valid walk (and, since [tr_dest t2 = tr_source t1],
+    also a cycle). *)
 Lemma chain_walk_pool_cycle :
   forall t1 t2 c (addr : address),
     tr_dest t1 = tr_source t2 ->
@@ -949,23 +1099,30 @@ Theorem leaf_pair_walk_correspondence :
 Proof.
   intros addr t1 t2 c Hstep.
   inversion Hstep; subst.
-  - (* RS_swap_chain (R1) — chainable gives the endpoint *)
+  - (* RS_swap_chain (R1).  chainable gives the endpoint. *)
     destruct H1 as [Hch _]. apply chain_walk_two. exact Hch.
   - (* RS_burn_chain (R2) *) apply chain_walk_two. assumption.
   - (* RS_mint_chain (R3) *) apply chain_walk_two. assumption.
   - (* RS_pool_cycle (R4) *) apply chain_walk_two. assumption.
   - (* RS_router_chain (R5) *) apply chain_walk_two. assumption.
-  - (* RS_leaf_chain (R6/R11) — input shape rules this out:
-       requires [RLeaf t; RChain c], not [RLeaf t1; RLeaf t2]. *)
+  - (* RS_leaf_chain (R6).  Input has [RLeaf t; RChain c]. *)
     destruct siblings; simpl in *; congruence.
-  - (* RS_chain_seq (R9) — same: input has [RChain c1; RChain c2]. *)
+  - (* RS_node_leaf_chain (R11).  Same. *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_chain_seq (R9).  Input has [RChain c1; RChain c2]. *)
     destruct siblings; simpl in *; congruence.
   - (* RS_same_token_chain (R10) *) apply chain_walk_two. assumption.
-  - (* RS_lift — input is [RTree addr children], not two leaves. *)
+  - (* RS_lift.  Input is [RTree addr children], not two leaves. *)
     destruct siblings; simpl in *; congruence.
-  - (* RS_merge — input has [RChain c1; RChain c2]. *)
+  - (* RS_merge_endpoints (R7) *)
     destruct siblings; simpl in *; congruence.
-  - (* RS_annotate — input has [RChain c]. *)
+  - (* RS_merge_add (R8) *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_merge_node (R12) *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_annotate_arb (R13) *)
+    destruct siblings; simpl in *; congruence.
+  - (* RS_annotate_cyc (R14) *)
     destruct siblings; simpl in *; congruence.
 Qed.
 
@@ -2012,8 +2169,8 @@ Qed.
     Technical note: we use [fix IH 1] (manual fixpoint
     on the first argument) instead of [induction]
     because [reduced_cft] is not an inductive type
-    that Rocq's [induction] tactic handles directly
-    — the recursive occurrence is inside a [list].
+    that Rocq's [induction] tactic handles directly:
+    the recursive occurrence is inside a [list].
     [fix IH 1] gives us an induction hypothesis on
     any structurally smaller [reduced_cft], which we
     then combine with list induction on [children].
@@ -2151,7 +2308,7 @@ Qed.
 (** The merge preserves the count_children fold sum.
     count_children(RChain _) = 0 for ALL chains
     regardless of internal structure.  So swapping
-    RChain c2 for RChain cm changes nothing — both
+    RChain c2 for RChain cm changes nothing: both
     contribute 0. *)
 Lemma scan_and_merge_fold_cc :
   forall c1 from_ prefix before after result init,
@@ -2927,7 +3084,7 @@ Qed.
 
 (** After lifting, every RTree has ≥2 children.
     I keep lifting until every Tree node has a
-    sibling — this is the fully_lifted invariant.
+    sibling, which is the fully_lifted invariant.
     Using forallb (not fold_left) for clean
     destructing in proofs. *)
 Fixpoint fully_lifted (t : reduced_cft) : bool :=
@@ -3113,7 +3270,10 @@ Proof.
     left. simpl. lia.
   - (* RS_router_chain (R5) *)
     left. simpl. lia.
-  - (* RS_leaf_chain (R6/R11) *)
+  - (* RS_leaf_chain (R6) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_node_leaf_chain (R11) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
   - (* RS_chain_seq (R9) *)
@@ -3125,18 +3285,33 @@ Proof.
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl.
     rewrite !fold_to_sum. lia.
-  - (* RS_merge (R7/R8/R12) *)
+  - (* RS_merge_endpoints (R7) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_annotate (R13/R14) *)
+  - (* RS_merge_add (R8) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_merge_node (R12) *)
+    left. rewrite !cc_RTree_sum, !length_app, !map_app,
+                  !list_sum_app. simpl. lia.
+  - (* RS_annotate_arb (R13).  Produces Arbitrage label,
+       which is_labeled, while c is unlabeled. *)
     right. split.
     + (* count_children unchanged *)
       rewrite !cc_RTree_sum, !length_app, !map_app,
               !list_sum_app. simpl. lia.
-    + (* count_unlabeled strictly drops:
-         c is unlabeled, c' is labeled. *)
+    + (* count_unlabeled strictly drops *)
       rewrite !cu_RTree_sum, !map_app, !list_sum_app.
       simpl. rewrite H5, H6. simpl. lia.
+  - (* RS_annotate_cyc (R14).  Produces Cycle label,
+       which is_labeled, while c is unlabeled. *)
+    right. split.
+    + (* count_children unchanged *)
+      rewrite !cc_RTree_sum, !length_app, !map_app,
+              !list_sum_app. simpl. lia.
+    + (* count_unlabeled strictly drops *)
+      rewrite !cu_RTree_sum, !map_app, !list_sum_app.
+      simpl. rewrite H4, H5. simpl. lia.
 Qed.
 
 Lemma rewrite_step_wf :
