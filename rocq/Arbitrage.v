@@ -3313,15 +3313,16 @@ Proof.
     simpl in H |- *. lia.
 Qed.
 
-(** The 3n termination bound:
-    u₀ ≤ n (proved) and c₀ ≤ 2n-2 ≤ 2n (stated).
-    Combined: u₀ + c₀ ≤ 3n. *)
+(** The 3n-2 termination bound, matching the paper's
+    Theorem 2 statement.  u₀ ≤ n by [unlabeled_le_transfers]
+    and c₀ ≤ 2n-2 by [cc_plus2_le_twice_ct] (handshaking on
+    fully-lifted trees), so u₀ + c₀ ≤ 3n - 2. *)
 Lemma termination_bound :
   forall t,
     fully_lifted t = true ->
     non_empty t = true ->
     count_unlabeled t + count_children t <=
-    3 * count_transfers t.
+    3 * count_transfers t - 2.
 Proof.
   intros t Hfl Hne.
   pose proof (unlabeled_le_transfers t).
