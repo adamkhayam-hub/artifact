@@ -4563,10 +4563,32 @@ Qed.
    Section 15: Extraction
    ============================================================ *)
 
-(** Once all proofs are complete:
+(** Extraction to OCaml.  Uncomment the block below to extract
+    the rewriting kernel ([step_fn], [try_combine_leaves]) and
+    the verdict cascade ([classify]) to
+    [arbitrage_verified.ml].  The eight declared [Parameter]s
+    are realized with sane defaults: addresses and tokens
+    become OCaml strings; decidable equality uses polymorphic
+    [(=)]; [token_equiv] defaults to strict equality (deployers
+    can override to encode ETH/WETH-style pairs); and the three
+    boolean classifiers default to constant-false and should be
+    replaced with the production catalogues at integration. *)
 
-    Extraction Language OCaml.
-    Extraction "arbitrage_verified"
-      classify has_reason
-      is_labeled count_unlabeled count_children.
+(*
+Require Extraction.
+Extraction Language OCaml.
+
+Extract Inductive bool => "bool" [ "true" "false" ].
+Extract Inductive sumbool => "bool" [ "true" "false" ].
+Extract Constant address => "string".
+Extract Constant token => "string".
+Extract Inlined Constant address_eq_dec => "(=)".
+Extract Inlined Constant token_eq_dec => "(=)".
+Extract Inlined Constant token_equiv => "(=)".
+Extract Inlined Constant is_burn => "(fun _ -> false)".
+Extract Inlined Constant is_mint => "(fun _ -> false)".
+Extract Inlined Constant is_singleton_router => "(fun _ -> false)".
+
+Extraction "arbitrage_verified.ml"
+  step_fn try_combine_leaves classify.
 *)
