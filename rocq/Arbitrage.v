@@ -12,8 +12,8 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 128 lemmas/theorems (5 headline Theorems
-    matching paper R1-R5 + 120 Lemmas + 3 Corollaries),
+    Statistics: 146 lemmas/theorems/corollaries
+    (7 Theorems, 136 Lemmas, 3 Corollaries),
     0 axioms, 0 Admitted.
     Rewriting rules: 15 constructors, one per rule
     R1--R14 from Table 1.  R15 (post-rewriting validation)
@@ -273,6 +273,17 @@ Fixpoint rcft_transfers (t : reduced_cft) : list transfer :=
       flat_map rcft_transfers children
   end.
 
+(** Membership: a chain c appears as some [RChain c]
+    somewhere in the reduced CFT structure.  Used by the
+    Refinement Proposition. *)
+Inductive chain_in_rcft : chain_tree -> reduced_cft -> Prop :=
+  | CIR_here : forall c,
+      chain_in_rcft c (RChain c)
+  | CIR_tree : forall c addr children child,
+      In child children ->
+      chain_in_rcft c child ->
+      chain_in_rcft c (RTree addr children).
+
 (* ============================================================
    Section 4: Walk and Cycle (Definitions 3-4)
    ============================================================ *)
@@ -296,6 +307,15 @@ Definition is_cycle (w : walk) : Prop :=
   | t1 :: _, t2 :: _ => tr_source t1 = tr_dest t2
   | _, _ => False
   end.
+
+(** A closed walk in the transfer graph G: a cycle whose
+    transfers all come from G.  Used by the Refinement
+    Proposition (Section 14b) to relate our arbitrage
+    detections to the cycles enumerable on the aggregate
+    transfer graph. *)
+Definition is_transfer_graph_cycle
+    (G : transfer_graph) (w : walk) : Prop :=
+  is_cycle w /\ Forall (fun t => In t G) w.
 
 (* ============================================================
    Section 5: Rewrite Rules
@@ -374,7 +394,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       tr_dest t1 = tr_source t2 ->
       tr_dest t2 = tr_source t1 ->
       tr_sender t1 <> tr_dest t1 ->
-      c = CT_node (tr_source t1) (tr_dest t1)
+      c = CT_node (tr_source t1) (tr_dest t2)
                   [tr_dest t1]
                   (tr_token t1) (tr_token t2)
                   t1
@@ -417,6 +437,13 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
   | RS_leaf_chain : forall t c c' addr siblings,
       (chain_transfers c' = t :: chain_transfers c \/
        chain_transfers c' = chain_transfers c ++ [t]) ->
+      ch_label c' = Chaining ->
+      ((chain_transfers c' = t :: chain_transfers c /\
+        ch_origin c' = tr_source t /\
+        ch_destination c' = ch_destination c) \/
+       (chain_transfers c' = chain_transfers c ++ [t] /\
+        ch_origin c' = ch_origin c /\
+        ch_destination c' = tr_dest t)) ->
       rewrite_step
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
@@ -434,6 +461,13 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         ch_token_out c = tr_token t)) ->
       (chain_transfers c' = t :: chain_transfers c \/
        chain_transfers c' = chain_transfers c ++ [t]) ->
+      ch_label c' = Chaining ->
+      ((chain_transfers c' = t :: chain_transfers c /\
+        ch_origin c' = tr_source t /\
+        ch_destination c' = ch_destination c) \/
+       (chain_transfers c' = chain_transfers c ++ [t] /\
+        ch_origin c' = ch_origin c /\
+        ch_destination c' = tr_dest t)) ->
       rewrite_step
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
@@ -445,6 +479,9 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_destination c1 = ch_origin c2 ->
       ch_token_out c1 = ch_token_in c2 ->
       chain_transfers c' = chain_transfers c1 ++ chain_transfers c2 ->
+      ch_label c' = Chaining ->
+      ch_origin c' = ch_origin c1 ->
+      ch_destination c' = ch_destination c2 ->
       rewrite_step
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain c']))
@@ -3462,10 +3499,9 @@ Qed.
 
 (** Strong-normalization (constructive form): there
     are no infinite [rewrite_step]-chains.  Equivalent
-    to [Acc]-based well-foundedness; we expose it
-    explicitly so that the termination claim is
-    quotable by reviewers without unpacking
-    [well_founded].  Constructive: no excluded middle. *)
+    to [Acc]-based well-foundedness, exposed in this
+    direct form for ease of reuse.  Constructive: no
+    excluded middle. *)
 Lemma rewrite_step_terminating :
   forall (seq : nat -> reduced_cft),
     (forall n, rewrite_step (seq n) (seq (S n))) -> False.
@@ -3511,12 +3547,12 @@ Definition leaf_pair_chain
           t1 (fun _ _ => 0%Z) l
           (CT_transfer t1) (CT_transfer t2).
 
-(** Pool-cycle chain (R4) has [dest1] as both
-    origin-side endpoint and destination -- the
-    sender escapes the pair. *)
+(** Pool-cycle chain (R4): a cycle from
+    [tr_source t1] back to [tr_source t1] via
+    [tr_dest t1]; the sender escapes the pair. *)
 Definition pool_cycle_chain
     (t1 t2 : transfer) : chain_tree :=
-  CT_node (tr_source t1) (tr_dest t1)
+  CT_node (tr_source t1) (tr_dest t2)
           [tr_dest t1]
           (tr_token t1) (tr_token t2)
           t1 (fun _ _ => 0%Z) Cycle
@@ -3841,6 +3877,686 @@ Theorem theorem_5_decidable_equivalence :
     (joinable from_ T1 T2 <-> Nf1 = Nf2).
 Proof.
   exact decidable_equivalence.
+Qed.
+
+(* ============================================================
+   Section 14c: Refinement of transfer-graph cycles
+
+   Every chain in a reachable reduced CFT labeled
+   [Arbitrage] forms a closed walk in T0's transfer
+   graph using only edges from T0.  The proof maintains
+   two invariants on every chain in the rcft:
+   endpoint correspondence ([endpoints_match]) and
+   closure under the [Arbitrage] label.  The invariant
+   propagates from any [no_chains] initial state
+   through [rewrite_star] and yields the structural
+   refinement.
+   ============================================================ *)
+
+(** Endpoint correspondence: a chain's structural origin and
+    destination match the source of its first leaf and the
+    destination of its last leaf. *)
+Definition endpoints_match (c : chain_tree) : Prop :=
+  match chain_transfers c with
+  | [] => False
+  | t :: _ =>
+      ch_origin c = tr_source t /\
+      ch_destination c = tr_dest (last (chain_transfers c) t)
+  end.
+
+(** Invariant on a reduced CFT: every chain has matching
+    endpoints, and any chain labeled Arbitrage additionally
+    has closure (origin = destination). *)
+Definition rcft_invariant (T : reduced_cft) : Prop :=
+  forall c, chain_in_rcft c T ->
+    endpoints_match c /\
+    (ch_label c = Arbitrage -> ch_origin c = ch_destination c).
+
+(** Initial CFTs from [Build-AST] have only [RLeaf] nodes
+    nested inside [RTree] structure, with no [RChain]
+    children.  Such CFTs satisfy [rcft_invariant] vacuously
+    because no chain appears in them.  Any reachable rcft
+    obtained by [rewrite_star] from such an initial state
+    inherits the invariant. *)
+Definition no_chains (T : reduced_cft) : Prop :=
+  forall c, ~ chain_in_rcft c T.
+
+Lemma no_chains_implies_invariant :
+  forall T, no_chains T -> rcft_invariant T.
+Proof.
+  intros T Hnc c Hin. exfalso. apply (Hnc c Hin).
+Qed.
+
+(** Membership iff helpers for [chain_in_rcft]. *)
+
+Lemma chain_in_RChain_iff :
+  forall c c0,
+    chain_in_rcft c (RChain c0) <-> c = c0.
+Proof.
+  intros c c0. split.
+  - intros H. inversion H; subst. reflexivity.
+  - intros ->. apply CIR_here.
+Qed.
+
+Lemma chain_in_RLeaf_no :
+  forall c t, ~ chain_in_rcft c (RLeaf t).
+Proof.
+  intros c t H. inversion H.
+Qed.
+
+Lemma chain_in_RTree_iff :
+  forall c addr children,
+    chain_in_rcft c (RTree addr children) <->
+    (exists child, In child children /\ chain_in_rcft c child).
+Proof.
+  intros c addr children. split.
+  - intros H. inversion H; subst. exists child; split; assumption.
+  - intros [child [Hin Hch]]. eapply CIR_tree; eassumption.
+Qed.
+
+(** A chain c is in [RTree addr (l1 ++ l2)] iff it is in the
+    [l1] portion or the [l2] portion. *)
+Lemma chain_in_RTree_app :
+  forall c addr l1 l2,
+    chain_in_rcft c (RTree addr (l1 ++ l2)) <->
+    (exists child, In child l1 /\ chain_in_rcft c child) \/
+    (exists child, In child l2 /\ chain_in_rcft c child).
+Proof.
+  intros c addr l1 l2. rewrite chain_in_RTree_iff. split.
+  - intros [child [Hin Hch]]. apply in_app_iff in Hin.
+    destruct Hin; [left | right]; exists child; split; assumption.
+  - intros [[child [Hin Hch]] | [child [Hin Hch]]].
+    + exists child; split; [apply in_app_iff; left; exact Hin | exact Hch].
+    + exists child; split; [apply in_app_iff; right; exact Hin | exact Hch].
+Qed.
+
+(** Iterated preservation: every transfer in a reachable Tf
+    came from the initial T0.  Direct induction on
+    [rewrite_star] using [preservation_step] at each step. *)
+Lemma preservation_star :
+  forall T0 Tf t,
+    rewrite_star T0 Tf ->
+    In t (rcft_transfers Tf) ->
+    In t (rcft_transfers T0).
+Proof.
+  intros T0 Tf t Hstar. induction Hstar as [T | T1 T2 T3 Hstep _ IH].
+  - intros; assumption.
+  - intros HtT3. apply (preservation_step T1 T2 Hstep). apply IH. exact HtT3.
+Qed.
+
+(** Leaves of a chain in a reduced CFT are transfers of that
+    reduced CFT.  Structural induction on the membership
+    proof. *)
+Lemma chain_leaves_in_rcft :
+  forall c T,
+    chain_in_rcft c T ->
+    forall t, In t (chain_transfers c) -> In t (rcft_transfers T).
+Proof.
+  intros c T Hin t Ht. induction Hin as [c0 | c0 addr children child Hch IH].
+  - simpl. exact Ht.
+  - simpl. apply in_flat_map. exists child; split; [exact Hch | apply IHIH; exact Ht].
+Qed.
+
+(** Helper lemmas about [last] of lists, used by
+    [rcft_invariant_step] below. *)
+
+Lemma last_indep_of_default :
+  forall A (l : list A) (d1 d2 : A),
+    l <> [] -> last l d1 = last l d2.
+Proof.
+  induction l as [|x [|y rest] IH]; intros d1 d2 Hne.
+  - exfalso; apply Hne; reflexivity.
+  - reflexivity.
+  - simpl. apply IH. discriminate.
+Qed.
+
+Lemma last_cons_nonempty :
+  forall A (x : A) (l : list A) (d : A),
+    l <> [] -> last (x :: l) d = last l d.
+Proof.
+  intros A x [|y rest] d Hne.
+  - exfalso; apply Hne; reflexivity.
+  - reflexivity.
+Qed.
+
+Lemma last_app_nonempty :
+  forall A (l1 l2 : list A) (d : A),
+    l2 <> [] -> last (l1 ++ l2) d = last l2 d.
+Proof.
+  induction l1 as [|x xs IH]; intros l2 d Hne.
+  - reflexivity.
+  - simpl. destruct (xs ++ l2) eqn:E.
+    + apply app_eq_nil in E. destruct E as [_ E2]. contradiction.
+    + rewrite <- E. apply IH. exact Hne.
+Qed.
+
+Lemma last_app_singleton :
+  forall A (l : list A) (x d : A),
+    last (l ++ [x]) d = x.
+Proof.
+  induction l as [|y ys IH]; intros x d.
+  - reflexivity.
+  - simpl. destruct (ys ++ [x]) eqn:E.
+    + apply app_eq_nil in E. destruct E as [_ E']. discriminate.
+    + rewrite <- E. apply IH.
+Qed.
+
+Lemma chain_transfers_nonempty :
+  forall c, chain_transfers c <> [].
+Proof.
+  induction c as [t | a1 a2 ms ti to t f lbl l Ihl r Ihr].
+  - simpl. discriminate.
+  - simpl. intros Heq. apply app_eq_nil in Heq.
+    destruct Heq as [E _]. contradiction.
+Qed.
+
+(** [endpoints_match] introduction lemma.  Given an explicit
+    cons form for [chain_transfers c] together with origin
+    and destination equations, derive [endpoints_match c].
+    Bypasses the [simpl]-on-stuck-fixpoint issue when the
+    chain's transfer list is fully decomposed. *)
+Lemma endpoints_match_cons :
+  forall c first_t rest,
+    chain_transfers c = first_t :: rest ->
+    ch_origin c = tr_source first_t ->
+    ch_destination c = tr_dest (last (first_t :: rest) first_t) ->
+    endpoints_match c.
+Proof.
+  intros c first_t rest Hct Horig Hdest.
+  unfold endpoints_match. rewrite Hct.
+  split; assumption.
+Qed.
+
+(** [rcft_invariant] is preserved under one rewriting
+    step.  Sibling chains carry over unchanged.  Newly
+    constructed chains satisfy [endpoints_match] from
+    the rule's chain_transfers / origin / destination
+    premises.  Closure under [Arbitrage] is vacuous for
+    every rule except R13, which has the closure
+    premise built in. *)
+Lemma rcft_invariant_step :
+  forall T1 T2,
+    rewrite_step T1 T2 ->
+    rcft_invariant T1 ->
+    rcft_invariant T2.
+Proof.
+  intros T1 T2 Hstep Hinv c0 Hin.
+  inversion Hstep; subst.
+
+  - (* R1: RS_swap_chain *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* R2: RS_burn_chain *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* R3: RS_mint_chain *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* R4: RS_pool_cycle *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* R5: RS_router_chain *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* R6: RS_leaf_chain *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + (* sibling chain: invariant carries over from input *)
+      apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + (* output chain c' *)
+      destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hcinv : endpoints_match c /\
+                      (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hcinv as [Hep _].
+      assert (Hcne : chain_transfers c <> []) by apply chain_transfers_nonempty.
+      unfold endpoints_match in Hep.
+      destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
+        [exfalso; exact Hep|].
+      destruct Hep as [Hco Hcd].
+      destruct H1 as [[Hap1 [Hap2 Hap3]] | [Hap1 [Hap2 Hap3]]].
+      * (* Prepend: chain_transfers c' = t :: chain_transfers c *)
+        split.
+        -- apply (endpoints_match_cons _ t (tc :: rest_c)).
+           ++ exact Hap1.
+           ++ exact Hap2.
+           ++ rewrite Hap3, Hcd. apply f_equal. symmetry.
+              rewrite (last_cons_nonempty _ t (tc :: rest_c) t)
+                by discriminate.
+              apply last_indep_of_default. discriminate.
+        -- intros Hlbl. rewrite H0 in Hlbl. discriminate.
+      * (* Append: chain_transfers c' = chain_transfers c ++ [t] *)
+        split.
+        -- apply (endpoints_match_cons _ tc (rest_c ++ [t])).
+           ++ rewrite Hap1. reflexivity.
+           ++ rewrite Hap2, Hco. reflexivity.
+           ++ rewrite Hap3. apply f_equal. symmetry.
+              rewrite (last_cons_nonempty _ tc (rest_c ++ [t]) tc)
+                by (intros He; apply app_eq_nil in He;
+                    destruct He as [_ He']; discriminate).
+              apply last_app_singleton.
+        -- intros Hlbl. rewrite H0 in Hlbl. discriminate.
+
+  - (* R11: RS_node_leaf_chain *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hcinv : endpoints_match c /\
+                      (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hcinv as [Hep _].
+      assert (Hcne : chain_transfers c <> []) by apply chain_transfers_nonempty.
+      unfold endpoints_match in Hep.
+      destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
+        [exfalso; exact Hep|].
+      destruct Hep as [Hco Hcd].
+      destruct H2 as [[Hap1 [Hap2 Hap3]] | [Hap1 [Hap2 Hap3]]].
+      * split.
+        -- apply (endpoints_match_cons _ t (tc :: rest_c)).
+           ++ exact Hap1.
+           ++ exact Hap2.
+           ++ rewrite Hap3, Hcd. apply f_equal. symmetry.
+              rewrite (last_cons_nonempty _ t (tc :: rest_c) t)
+                by discriminate.
+              apply last_indep_of_default. discriminate.
+        -- intros Hlbl. rewrite H1 in Hlbl. discriminate.
+      * split.
+        -- apply (endpoints_match_cons _ tc (rest_c ++ [t])).
+           ++ rewrite Hap1. reflexivity.
+           ++ rewrite Hap2, Hco. reflexivity.
+           ++ rewrite Hap3. apply f_equal. symmetry.
+              rewrite (last_cons_nonempty _ tc (rest_c ++ [t]) tc)
+                by (intros He; apply app_eq_nil in He;
+                    destruct He as [_ He']; discriminate).
+              apply last_app_singleton.
+        -- intros Hlbl. rewrite H1 in Hlbl. discriminate.
+
+  - (* R9: RS_chain_seq *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hc1inv : endpoints_match c1 /\
+                       (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      assert (Hc2inv : endpoints_match c2 /\
+                       (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
+      unfold endpoints_match in Hep1, Hep2.
+      destruct (chain_transfers c1) as [|t1c rest_c1] eqn:Hct1;
+        [exfalso; exact Hep1|].
+      destruct (chain_transfers c2) as [|t2c rest_c2] eqn:Hct2;
+        [exfalso; exact Hep2|].
+      destruct Hep1 as [Hco1 _], Hep2 as [_ Hcd2].
+      split.
+      * apply (endpoints_match_cons _ t1c (rest_c1 ++ t2c :: rest_c2)).
+        -- rewrite H1. reflexivity.
+        -- rewrite H3, Hco1. reflexivity.
+        -- rewrite H4, Hcd2. apply f_equal. symmetry.
+           rewrite (last_cons_nonempty _ t1c (rest_c1 ++ t2c :: rest_c2) t1c)
+             by (intros He; apply app_eq_nil in He;
+                 destruct He as [_ He']; discriminate).
+           rewrite (last_app_nonempty _ rest_c1 (t2c :: rest_c2) t1c)
+             by discriminate.
+           apply last_indep_of_default. discriminate.
+      * intros Hlbl. rewrite H2 in Hlbl. discriminate.
+
+  - (* R10: RS_same_token_chain *)
+    apply chain_in_RTree_iff in Hin.
+    destruct Hin as [child [Hch Hin']].
+    simpl in Hch. destruct Hch as [Heq | []]. subst child.
+    apply chain_in_RChain_iff in Hin'. subst c0.
+    split.
+    + unfold endpoints_match. simpl. split; reflexivity.
+    + simpl. intros Hlbl. discriminate.
+
+  - (* RS_lift *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hchildren].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hchildren as [child [Hinch Hch]].
+      exists (RTree addr children). split.
+      * apply in_app_iff. right. simpl. left. reflexivity.
+      * eapply CIR_tree; [exact Hinch | exact Hch].
+
+  - (* R7: RS_merge_endpoints *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hc1inv : endpoints_match c1 /\
+                       (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      assert (Hc2inv : endpoints_match c2 /\
+                       (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
+      unfold endpoints_match in Hep1, Hep2.
+      destruct (chain_transfers c1) as [|t1c rest_c1] eqn:Hct1;
+        [exfalso; exact Hep1|].
+      destruct (chain_transfers c2) as [|t2c rest_c2] eqn:Hct2;
+        [exfalso; exact Hep2|].
+      destruct Hep1 as [Hco1 _], Hep2 as [_ Hcd2].
+      split.
+      * apply (endpoints_match_cons _ t1c (rest_c1 ++ t2c :: rest_c2)).
+        -- rewrite H7. reflexivity.
+        -- rewrite H4, Hco1. reflexivity.
+        -- rewrite H5, H0, Hcd2. apply f_equal. symmetry.
+           rewrite (last_cons_nonempty _ t1c (rest_c1 ++ t2c :: rest_c2) t1c)
+             by (intros He; apply app_eq_nil in He;
+                 destruct He as [_ He']; discriminate).
+           rewrite (last_app_nonempty _ rest_c1 (t2c :: rest_c2) t1c)
+             by discriminate.
+           apply last_indep_of_default. discriminate.
+      * intros Hlbl. rewrite H6 in Hlbl. discriminate.
+
+  - (* R8: RS_merge_add *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hc1inv : endpoints_match c1 /\
+                       (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      assert (Hc2inv : endpoints_match c2 /\
+                       (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
+      unfold endpoints_match in Hep1, Hep2.
+      destruct (chain_transfers c1) as [|t1c rest_c1] eqn:Hct1;
+        [exfalso; exact Hep1|].
+      destruct (chain_transfers c2) as [|t2c rest_c2] eqn:Hct2;
+        [exfalso; exact Hep2|].
+      destruct Hep1 as [Hco1 _], Hep2 as [_ Hcd2].
+      split.
+      * apply (endpoints_match_cons _ t1c (rest_c1 ++ t2c :: rest_c2)).
+        -- rewrite H7. reflexivity.
+        -- rewrite H4, Hco1. reflexivity.
+        -- rewrite H5, H0, Hcd2. apply f_equal. symmetry.
+           rewrite (last_cons_nonempty _ t1c (rest_c1 ++ t2c :: rest_c2) t1c)
+             by (intros He; apply app_eq_nil in He;
+                 destruct He as [_ He']; discriminate).
+           rewrite (last_app_nonempty _ rest_c1 (t2c :: rest_c2) t1c)
+             by discriminate.
+           apply last_indep_of_default. discriminate.
+      * intros Hlbl. rewrite H6 in Hlbl. discriminate.
+
+  - (* R12: RS_merge_node *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hc1inv : endpoints_match c1 /\
+                       (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      assert (Hc2inv : endpoints_match c2 /\
+                       (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
+        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
+      unfold endpoints_match in Hep1, Hep2.
+      destruct (chain_transfers c1) as [|t1c rest_c1] eqn:Hct1;
+        [exfalso; exact Hep1|].
+      destruct (chain_transfers c2) as [|t2c rest_c2] eqn:Hct2;
+        [exfalso; exact Hep2|].
+      destruct Hep1 as [Hco1 _], Hep2 as [_ Hcd2].
+      split.
+      * apply (endpoints_match_cons _ t1c (rest_c1 ++ t2c :: rest_c2)).
+        -- rewrite H7. reflexivity.
+        -- rewrite H4, Hco1. reflexivity.
+        -- rewrite H5, H0, Hcd2. apply f_equal. symmetry.
+           rewrite (last_cons_nonempty _ t1c (rest_c1 ++ t2c :: rest_c2) t1c)
+             by (intros He; apply app_eq_nil in He;
+                 destruct He as [_ He']; discriminate).
+           rewrite (last_app_nonempty _ rest_c1 (t2c :: rest_c2) t1c)
+             by discriminate.
+           apply last_indep_of_default. discriminate.
+      * intros Hlbl. rewrite H6 in Hlbl. discriminate.
+
+  - (* R13: RS_annotate_arb *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hcinv : endpoints_match c /\
+                      (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hcinv as [Hep _].
+      unfold endpoints_match in Hep.
+      destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
+        [exfalso; exact Hep|].
+      destruct Hep as [Hco Hcd].
+      split.
+      * apply (endpoints_match_cons _ tc rest_c).
+        -- rewrite H8. reflexivity.
+        -- rewrite H1, Hco. reflexivity.
+        -- rewrite H2, Hcd. reflexivity.
+      * intros _. rewrite H1, H2. exact H.
+
+  - (* R14: RS_annotate_cyc *)
+    apply chain_in_RTree_app in Hin.
+    destruct Hin as [Hsibs | Hnew].
+    + apply Hinv. apply chain_in_RTree_iff.
+      destruct Hsibs as [child [Hinch Hch]]. exists child. split.
+      * apply in_app_iff. left. exact Hinch.
+      * exact Hch.
+    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
+      destruct Hinch as [Heq | []]. subst child.
+      apply chain_in_RChain_iff in Hch. subst c0.
+      assert (Hcinv : endpoints_match c /\
+                      (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
+      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
+        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply CIR_here. }
+      destruct Hcinv as [Hep _].
+      unfold endpoints_match in Hep.
+      destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
+        [exfalso; exact Hep|].
+      destruct Hep as [Hco Hcd].
+      split.
+      * apply (endpoints_match_cons _ tc rest_c).
+        -- rewrite H7. reflexivity.
+        -- rewrite H0, Hco. reflexivity.
+        -- rewrite H1, Hcd. reflexivity.
+      * intros Hlbl. rewrite H5 in Hlbl. discriminate.
+Qed.
+
+(** Iterated preservation of [rcft_invariant] under
+    [rewrite_star]. *)
+Lemma rcft_invariant_preserved :
+  forall T0 Tf,
+    rewrite_star T0 Tf ->
+    rcft_invariant T0 ->
+    rcft_invariant Tf.
+Proof.
+  intros T0 Tf Hstar.
+  induction Hstar as [T | T1 T2 T3 Hstep _ IH].
+  - intros; assumption.
+  - intros HinvT1. apply IH.
+    apply (rcft_invariant_step T1 T2 Hstep HinvT1).
+Qed.
+
+Theorem refinement_of_transfer_graph_cycles :
+  forall T0 Tf c,
+    walks_in_rcft T0 ->
+    no_chains T0 ->
+    rewrite_star T0 Tf ->
+    chain_in_rcft c Tf ->
+    ch_label c = Arbitrage ->
+    Forall (fun t => In t (rcft_transfers T0)) (chain_transfers c) /\
+    ch_origin c = ch_destination c /\
+    endpoints_match c.
+Proof.
+  intros T0 Tf c Hwalks Hnc Hstar Hin Harb.
+  assert (Hinv : rcft_invariant Tf).
+  { apply (rcft_invariant_preserved T0 Tf Hstar).
+    apply no_chains_implies_invariant. exact Hnc. }
+  destruct (Hinv c Hin) as [Hep Hcl].
+  split; [| split].
+  - apply Forall_forall. intros t Ht.
+    apply (preservation_star T0 Tf t Hstar).
+    apply (chain_leaves_in_rcft c Tf Hin t Ht).
+  - exact (Hcl Harb).
+  - exact Hep.
+Qed.
+
+(* ============================================================
+   Section 14d: Structural soundness of [classify]
+
+   Any chain in a reachable reduced CFT that
+   carries the [Arbitrage] label and survives
+   Validate-Deltas ([validated_arbitrage])
+   satisfies the structural conditions of
+   Definition 5: closure, endpoint
+   correspondence, walk decomposition over T0's
+   transfer graph, inclusion in T0's edge set,
+   and positive gross delta at the cycle origin.
+   ============================================================ *)
+
+(** Inductive [chain_in_rcft] membership coincides
+    with the flat [rcft_chains] list. *)
+Lemma chain_in_rcft_in_rcft_chains :
+  forall T c, chain_in_rcft c T -> In c (rcft_chains T).
+Proof.
+  intros T c Hin.
+  induction Hin as [c0 | c0 addr children child Hch IH].
+  - simpl. left. reflexivity.
+  - simpl. apply in_flat_map. exists child; split; assumption.
+Qed.
+
+(** [walks_in_rcft] transports to per-chain
+    [chain_walks]. *)
+Lemma walks_in_rcft_chain_walks :
+  forall T c,
+    walks_in_rcft T ->
+    chain_in_rcft c T ->
+    chain_walks c.
+Proof.
+  intros T c Hwalks Hin.
+  apply chain_in_rcft_in_rcft_chains in Hin.
+  unfold walks_in_rcft in Hwalks.
+  rewrite Forall_forall in Hwalks.
+  apply Hwalks. exact Hin.
+Qed.
+
+(** Structural soundness of the [classify] verdict.
+    A validated arbitrage chain in a reachable CFT
+    satisfies all conditions of Definition 5:
+    inclusion, closure, endpoint correspondence,
+    walk decomposition, and positive gross delta. *)
+Theorem classify_structural_soundness :
+  forall T0 Tf c,
+    walks_in_rcft T0 ->
+    no_chains T0 ->
+    rewrite_star T0 Tf ->
+    chain_in_rcft c Tf ->
+    validated_arbitrage c ->
+    Forall (fun t => In t (rcft_transfers T0)) (chain_transfers c) /\
+    ch_origin c = ch_destination c /\
+    endpoints_match c /\
+    chain_walks c /\
+    (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z.
+Proof.
+  intros T0 Tf c Hwalks Hnc Hstar Hin [Hlbl Hdelta].
+  destruct (refinement_of_transfer_graph_cycles _ _ _
+              Hwalks Hnc Hstar Hin Hlbl)
+    as [Htfs [Hclos Hep]].
+  repeat split; try assumption.
+  apply (walks_in_rcft_chain_walks Tf c).
+  - apply (walk_correspondence T0 Tf Hstar Hwalks).
+  - exact Hin.
 Qed.
 
 (* ============================================================
