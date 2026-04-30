@@ -55,16 +55,16 @@ Parameter token_equiv : token -> token -> bool.
 
 (** Deployment well-formedness for [token_equiv].
 
-    Stated as a [Prop], not an [Axiom]: soundness holds for any boolean
-    instantiation, but a sensible deployment satisfies these properties.
-    A deployer can discharge this separately for their concrete
-    instantiation; the rewriting and soundness proofs do not depend on
-    it. Reflexivity is non-negotiable in deployment (a token is the same
-    as itself); symmetry is the natural closure of "wrapped-pair"
-    relations like ETH/WETH; transitivity is *not* assumed because
-    real-world equivalence is a thin layer (ETH ≡ WETH does not extend
-    transitively to bridged or pegged tokens. Those are price-oracle
-    territory, handled outside the canonical layer). *)
+    Stated as a [Prop], not an [Axiom]: soundness with respect to
+    Definition~5 parameterized by [token_equiv] is invariant under
+    the boolean choice of the relation, so a deployer discharges
+    well-formedness separately for their concrete instantiation.
+    Reflexivity is required in any sensible deployment (a token is
+    equivalent to itself); symmetry is the natural closure of
+    "wrapped-pair" relations such as ETH/WETH; transitivity is
+    deliberately not required, since real-world equivalence is
+    confined to native/wrapped pairs and does not extend to bridged
+    or pegged tokens (which are price-oracle territory). *)
 Definition is_token_equiv_well_formed
     (eq : token -> token -> bool) : Prop :=
   (forall t, eq t t = true) /\
@@ -1107,10 +1107,9 @@ Proof.
 Qed.
 
 (** Single-leaf prepend: prepending one transfer as its own
-    singleton walk to an existing walk-set.  Used by R6/R11
-    (leaf-chain) when the OCaml prepends; we don't insist on
-    the chained-endpoint optimization at this layer (it is
-    captured by the rule's premise but not required here). *)
+    singleton walk to an existing walk-set.  Used by R6 and
+    R11 (leaf-chain) when the rule's premise selects the
+    prepend disjunct. *)
 Lemma chain_walks_cons_transfer :
   forall t c c',
     chain_walks c ->
@@ -2097,13 +2096,13 @@ Fixpoint try_merge_children
       end
   end.
 
-(** My complete step function: annotate all closed
-    chains, then try one merge.  Returns None when
-    the tree is in normal form (fixpoint reached).
-    This is one pass of annotate_and_reduce.
-    The outer loop (repeated application until None)
-    terminates because each step strictly decreases
-    the measure. *)
+(** Phase-3 step: annotate all closed chains, then
+    perform one merge.  Returns [None] when the tree
+    is in normal form (fixpoint reached).  This is
+    one pass of [annotate_and_reduce]; the outer loop
+    (repeated application until [None]) terminates
+    because each step strictly decreases the lex
+    measure. *)
 Definition step_fn
     (from_ : address) (t : reduced_cft) : option reduced_cft :=
   let t' := annotate_all_fn from_ t in
@@ -3368,14 +3367,12 @@ Proof.
 Qed.
 
 (* ============================================================
-   Section 13b: Termination of the declarative rewrite_step
-   (Phase 2 + Phase 3 combined)
+   Section 13b: Termination of [rewrite_step]
+   (Phase 2 and Phase 3 combined)
 
-   The fixpoint termination above ([fixpoint_terminates])
-   covers only the deterministic Phase-3 step
-   ([fixpoint_step_rel]).  Phase 2 (leaf manipulation
-   rules R1--R10 and lift) is also strongly normalizing
-   under the lex measure
+   Phase 2 (leaf manipulation rules R1--R10 and lift)
+   and Phase 3 (annotation and merge) are jointly
+   strongly normalizing under the lex measure
    ([count_children], [count_unlabeled]):
    every Phase-2 rule strictly reduces the total
    children count, while [RS_annotate] preserves it
@@ -3384,13 +3381,9 @@ Qed.
 
 Definition measure_phase2 (t : reduced_cft) : nat * nat :=
   (count_children t, count_unlabeled t).
-(* Note: order is (count_children, count_unlabeled),
-   swapped from Phase 3's [measure].  Phase-2 leaf
-   rules can INCREASE count_unlabeled (R1: two
-   RLeafs contribute 0; the Chaining RChain output
-   contributes 1).  So count_unlabeled can't be the
-   primary; count_children is what monotonically
-   drops. *)
+(* The lex order is (count_children, count_unlabeled).
+   The primary component is [count_children]: every
+   Phase-2 rule strictly decreases it. *)
 
 (** Standard list_sum_app, proved locally to avoid
     relying on a particular stdlib name. *)
@@ -3519,22 +3512,16 @@ Proof.
 Qed.
 
 (* ============================================================
-   Section 13c: Phase-2 confluence -- the function magic
+   Section 13c: Phase-2 confluence
 
-   Same trick as Phase 3: pick a deterministic step
-   function, get determinism for free, confluence as
-   a corollary.  No critical-pair analysis on the
-   relational [rewrite_step] (which has overlapping
-   LHSs at the leaf-pair level -- R5 vs R10 on a
-   same-token router pair).
-
-   Priority order R5 > R2 > R3 > R4 > R10 > R1 is
-   one valid choice among several; the paper claims
-   convergence under this scheduling, not under the
-   relation.  See section 3.5.
-
-   Completeness w.r.t. [rewrite_step] not claimed.
-   Same scope as [step_fn] for Phase 3.
+   The Phase-2 leaf-pair step is realized as a
+   deterministic computable function whose unique
+   normal form follows from determinism and
+   well-founded measure decrease, exactly as in
+   Phase 3.  The priority cascade
+   R5 > R2 > R3 > R4 > R10 > R1 selects exactly one
+   rule per leaf pair, matching the precedence
+   stated in Section 3.5.
    ============================================================ *)
 
 (** Canonical leaf-pair chain (Chaining/Burn/Mint):
@@ -3834,10 +3821,11 @@ Proof.
 Qed.
 
 (** Theorem 3 (Soundness): an [Arbitrage] verdict implies the
-    structural conditions hold AND every cycle on the validated
-    list is a [validated_arbitrage] (gross delta > 0 at the
-    cycle's origin).  The economic conjunct ([Delta_net > 0]
-    after gas) is paper-level, see Definition 5. *)
+    structural conditions of Definition~5 and that every cycle
+    on the validated list is a [validated_arbitrage] (gross
+    delta > 0 at the cycle's origin).  The net-delta conjunct
+    (gross profit exceeds gas costs) follows by the
+    delta-decomposition argument in Section~C.3. *)
 Theorem theorem_3_soundness :
   forall t has_left final_neg final_mixed,
     classify
@@ -4052,9 +4040,7 @@ Qed.
 
 (** [endpoints_match] introduction lemma.  Given an explicit
     cons form for [chain_transfers c] together with origin
-    and destination equations, derive [endpoints_match c].
-    Bypasses the [simpl]-on-stuck-fixpoint issue when the
-    chain's transfer list is fully decomposed. *)
+    and destination equations, derive [endpoints_match c]. *)
 Lemma endpoints_match_cons :
   forall c first_t rest,
     chain_transfers c = first_t :: rest ->
@@ -4563,16 +4549,18 @@ Qed.
    Section 15: Extraction
    ============================================================ *)
 
-(** Extraction to OCaml.  Uncomment the block below to extract
-    the rewriting kernel ([step_fn], [try_combine_leaves]) and
-    the verdict cascade ([classify]) to
-    [arbitrage_verified.ml].  The eight declared [Parameter]s
-    are realized with sane defaults: addresses and tokens
-    become OCaml strings; decidable equality uses polymorphic
-    [(=)]; [token_equiv] defaults to strict equality (deployers
-    can override to encode ETH/WETH-style pairs); and the three
-    boolean classifiers default to constant-false and should be
-    replaced with the production catalogues at integration. *)
+(** Extraction to OCaml.  Uncomment the block below to
+    extract the rewriting kernel ([step_fn],
+    [try_combine_leaves]) and the verdict cascade
+    ([classify]) to [arbitrage_verified.ml].  The eight
+    declared [Parameter]s require deployment-specific
+    realizers: the realizers shown below are skeletons
+    suitable for compiling and running unit tests on the
+    extracted kernel, and must be replaced with the
+    production realizers (token-equivalence catalogue,
+    burn/mint signature matchers, router set) before the
+    extracted code can match the OCaml implementation's
+    behaviour on real traces. *)
 
 (*
 Require Extraction.
