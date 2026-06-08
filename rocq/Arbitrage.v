@@ -15,9 +15,9 @@
     Statistics: 146 lemmas/theorems/corollaries
     (7 Theorems, 136 Lemmas, 3 Corollaries),
     0 axioms, 0 Admitted.
-    Rewriting rules: 15 constructors, one per rule
-    R1--R14 from Table 1.  R15 (post-rewriting validation)
-    is modeled by the [validated_arbitrage] predicate.
+    Rewriting rules: 15 constructors (R1--R15 from
+    Table 1).  R16 (post-rewriting validation) is
+    modeled by the [validated_arbitrage] predicate.
     Compile: opam exec -- rocq compile Arbitrage.v
 
     Author: [anonymous]
@@ -372,8 +372,8 @@ Definition chainable (t1 t2 : transfer) : Prop :=
 
 (** The rewriting rules correspond one-to-one to
     Table 1 in the paper.  Each constructor is
-    annotated with its rule number (R1--R14).
-    R15 (post-rewriting validation) is modeled by
+    annotated with its rule number (R1--R15).
+    R16 (post-rewriting validation) is modeled by
     the [validated_arbitrage] predicate below. *)
 
 Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
@@ -468,7 +468,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr [RLeaf t1; RLeaf t2])
         (RTree addr [RChain c])
 
-  (* ---- Chaining (R6, R9) ----
+  (* ---- Chaining (R6, R10, R12) ----
      Chain a leaf with an existing chain, or
      chain two sequential chains. *)
 
@@ -492,11 +492,11 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
 
-  (** R11: same shape as R6, but applied across call
+  (** R12: same shape as R6, but applied across call
       frames.  Crossing a call boundary, the token has
       to match the chain's endpoint token; otherwise
       we would conflate two distinct asset flows.  The
-      token continuity check is what distinguishes R11
+      token continuity check is what distinguishes R12
       from R6. *)
   | RS_node_leaf_chain : forall t c c' addr siblings,
       ((tr_dest t = ch_origin c /\
@@ -516,8 +516,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RLeaf t; RChain c]))
         (RTree addr (siblings ++ [RChain c']))
 
-  (** R9: Chain--chain sequential chaining.
-      d(C1)=s(C2) with token continuity.
+  (** R10: Chain--chain sequential chaining.
+      d(C1)=s(C2) with token continuity (or BalCont).
       [eth_graph.ml:1010--1045] *)
   | RS_chain_seq : forall c1 c2 c' addr siblings,
       ch_destination c1 = ch_origin c2 ->
@@ -531,9 +531,9 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain c']))
 
-  (* ---- Node manipulation (R10) ---- *)
+  (* ---- Node manipulation (R11) ---- *)
 
-  (** R10: Same-token leaf chain (node level).
+  (** R11: Same-token leaf chain (node level).
       Two leaves with same token and adjacent
       addresses.  [eth_arbitrage.ml:98] *)
   | RS_same_token_chain : forall t1 t2 c addr,
@@ -563,7 +563,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree parent_addr (siblings ++ [RTree addr children]))
         (RTree parent_addr (siblings ++ children))
 
-  (* ---- Endpoint merge (R7, R8, R12) ---- *)
+  (* ---- Endpoint merge (R7, R8, R9, R13) ---- *)
 
   (** R7: endpoint merge.  Two chains share the same
       source and destination (with s != d), the output
@@ -627,7 +627,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
 
-  (** R12: node-level merge.  A single token end-to-end
+  (** R13: node-level merge.  A single token end-to-end
       in both chains (no token swap on either side),
       with the same source and destination addresses.
       This is the same-token structural variant of
@@ -648,19 +648,19 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RChain c1; RChain c2]))
         (RTree addr (siblings ++ [RChain cm]))
 
-  (* ---- Annotation (R13, R14) ----
+  (* ---- Annotation (R14, R15) ----
      Both rules see the transaction sender [from].
      The split on whether [from] is inside or outside
-     the cycle is semantic, not cosmetic: R13 says
+     the cycle is semantic, not cosmetic: R14 says
      an external orchestrator captured value (we call
-     this Arbitrage), R14 says the cycle was driven
+     this Arbitrage), R15 says the cycle was driven
      by a contract sitting inside it (we call this
      Cycle, but not Arbitrage in our sense).  This is
-     why R13 and R14 never compete on the same input:
+     why R14 and R15 never compete on the same input:
      the [from] condition partitions the cases.
      [eth_tools.ml:1265] *)
 
-  (** R13: Arbitrage label.  s(C) = d(C), tokens match
+  (** R14: Arbitrage label.  s(C) = d(C), tokens match
       modulo =_tau, and the orchestrator [from] is
       either outside the cycle or equal to its source.
       This is the EOA-initiated case, where an external
@@ -682,7 +682,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
         (RTree addr (siblings ++ [RChain c]))
         (RTree addr (siblings ++ [RChain c']))
 
-  (** R14: Cycle label.  s(C) = d(C) and [from] sits
+  (** R15: Cycle label.  s(C) = d(C) and [from] sits
       inside the cycle.  We do not claim arbitrage
       here: a contract took the round trip, but the
       value capture is internal to the cycle and not
@@ -907,7 +907,7 @@ Proof.
         -- right. exact Hin.
         -- simpl in Hin. destruct Hin as [Heq2 | []].
            subst. left. reflexivity.
-  - (* RS_node_leaf_chain (R11) *)
+  - (* RS_node_leaf_chain (R12) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
@@ -922,7 +922,7 @@ Proof.
         -- right. exact Hin.
         -- simpl in Hin. destruct Hin as [Heq2 | []].
            subst. left. reflexivity.
-  - (* RS_chain_seq (R9) *)
+  - (* RS_chain_seq (R10) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
@@ -930,7 +930,7 @@ Proof.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
     + right. rewrite H1 in Hin. exact Hin.
-  - (* RS_same_token_chain (R10) *) exact Hin.
+  - (* RS_same_token_chain (R11) *) exact Hin.
   - (* RS_lift *)
     rewrite flat_map_app_dist in *.
     rewrite in_app_iff in *.
@@ -961,7 +961,7 @@ Proof.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
     + right. rewrite H6 in Hin. exact Hin.
-  - (* RS_merge_node (R12) *)
+  - (* RS_merge_node (R13) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
@@ -969,7 +969,7 @@ Proof.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
     + right. rewrite H7 in Hin. exact Hin.
-  - (* RS_annotate_arb (R13) *)
+  - (* RS_annotate_arb (R14) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
@@ -977,7 +977,7 @@ Proof.
     destruct Hin as [Hin | Hin].
     + left. exact Hin.
     + right. rewrite H8 in Hin. exact Hin.
-  - (* RS_annotate_cyc (R14) *)
+  - (* RS_annotate_cyc (R15) *)
     rewrite !flat_map_app_dist in *.
     simpl in *. rewrite !app_nil_r in *.
     apply in_app_iff in Hin.
@@ -1009,7 +1009,7 @@ Qed.
    The paper's Theorem 1 makes a stronger claim: chains in
    reduced CFTs correspond to walks in the original transfer
    graph.  This section mechanizes the claim for the leaf-pair
-   construction rules (R1, R2, R3, R4, R5, R10), which originate
+   construction rules (R1, R2, R3, R4, R5, R11), which originate
    chains.  Each rule's premise gives tr_dest t1 = tr_source t2
    directly (or via [chainable]), so the resulting 2-leaf chain
    trivially forms a valid walk.
@@ -1109,7 +1109,7 @@ Proof.
   intros. subst. apply chain_walk_two. assumption.
 Qed.
 
-(** R10: Same-token leaf chain. *)
+(** R11: Same-token leaf chain. *)
 Lemma chain_walk_same_token :
   forall t1 t2 c (addr : address),
     tr_dest t1 = tr_source t2 ->
@@ -1130,7 +1130,7 @@ Qed.
    Section 8c: Walk correspondence for all rules (multi-walk)
 
    Section 8b mechanized [chain_walk] (single linear walk) for
-   the leaf-pair rules.  The merge rules (R7/R8/R12) produce
+   the leaf-pair rules.  The merge rules (R7/R8/R9/R13) produce
    chains whose leaves do NOT form a single linear walk: a
    merged chain represents two parallel paths a -> b through
    different intermediaries (R7) or two cycles at the same
@@ -1166,7 +1166,7 @@ Qed.
 (** Walk-set concat: two chain-walks-decomposable chains, when
     their transfer-lists are concatenated, decompose into the
     concatenated walk-set.  This is the engine for both merge
-    rules (R7, R8, R12) and sequential chain combination (R9). *)
+    rules (R7, R8, R9, R13) and sequential chain combination (R10). *)
 Lemma chain_walks_app :
   forall c1 c2 cm,
     chain_walks c1 ->
@@ -1182,7 +1182,7 @@ Qed.
 
 (** Single-leaf prepend: prepending one transfer as its own
     singleton walk to an existing walk-set.  Used by R6 and
-    R11 (leaf-chain) when the rule's premise selects the
+    R12 (leaf-chain) when the rule's premise selects the
     prepend disjunct. *)
 Lemma chain_walks_cons_transfer :
   forall t c c',
@@ -1209,7 +1209,7 @@ Proof.
   - rewrite Hc'. rewrite Heq. rewrite concat_app. simpl. reflexivity.
 Qed.
 
-(** Equality preservation: relabel-only rules (R13, R14) keep
+(** Equality preservation: relabel-only rules (R14, R15) keep
     the leaf list intact, so the walk-set is inherited. *)
 Lemma chain_walks_eq_transfers :
   forall c c',
@@ -1243,15 +1243,15 @@ Definition walks_in_rcft (T : reduced_cft) : Prop :=
     rewritten tree continue to decompose into walk-sets in the
     original transfer graph.  Each rule contributes a
     construction:
-    - R1-R5, R10: build a 2-leaf single-walk chain.
-    - R6, R11: prepend or append a single transfer; either as a
+    - R1-R5, R11: build a 2-leaf single-walk chain.
+    - R6, R12: prepend or append a single transfer; either as a
       new singleton walk in the walk-set or, when the OCaml
       premise on chained endpoints holds, extending an existing
       walk.  We use the splitting form here.
-    - R9: concatenate walk-sets of two chains.
-    - R7, R8, R12: walk-set union (multi-walk: each input chain
-      contributes its walks).
-    - R13, R14: relabel only; walk-set unchanged.
+    - R10: concatenate walk-sets of two chains.
+    - R7, R8, R9, R13: walk-set union (multi-walk: each input
+      chain contributes its walks).
+    - R14, R15: relabel only; walk-set unchanged.
     - RS_lift: structural; chains are unchanged. *)
 (** Helper: extracting chains from a list of [reduced_cft]
     distributes over [++]. *)
@@ -1297,7 +1297,7 @@ Proof.
     destruct H as [Heq | Heq].
     + eapply chain_walks_cons_transfer; [exact Hcw | exact Heq].
     + eapply chain_walks_snoc_transfer; [exact Hcw | exact Heq].
-  - (* RS_node_leaf_chain (R11) *)
+  - (* RS_node_leaf_chain (R12) *)
     destruct Hwalks as [Hsibs Hc].
     inversion Hc as [|? ? Hcw _]; subst.
     split; [exact Hsibs |].
@@ -1305,14 +1305,14 @@ Proof.
     destruct H0 as [Heq | Heq].
     + eapply chain_walks_cons_transfer; [exact Hcw | exact Heq].
     + eapply chain_walks_snoc_transfer; [exact Hcw | exact Heq].
-  - (* RS_chain_seq (R9) *)
+  - (* RS_chain_seq (R10) *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
     inversion Hrest as [|? ? Hc2' _]; subst.
     split; [exact Hsibs |].
     constructor; [|constructor].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H1].
-  - (* RS_same_token_chain (R10) *)
+  - (* RS_same_token_chain (R11) *)
     constructor; [|constructor].
     apply chain_walk_implies_walks. eapply chain_walk_same_token; eauto.
   - (* RS_lift: lifted children inherit. *)
@@ -1339,20 +1339,20 @@ Proof.
     split; [exact Hsibs |].
     constructor; [|constructor].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H6].
-  - (* RS_merge_node (R12) *)
+  - (* RS_merge_node (R13) *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
     inversion Hrest as [|? ? Hc2' _]; subst.
     split; [exact Hsibs |].
     constructor; [|constructor].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
-  - (* RS_annotate_arb (R13) *)
+  - (* RS_annotate_arb (R14) *)
     destruct Hwalks as [Hsibs Hc].
     inversion Hc as [|? ? Hcw _]; subst.
     split; [exact Hsibs |].
     constructor; [|constructor].
     eapply chain_walks_eq_transfers; [exact Hcw | exact H8].
-  - (* RS_annotate_cyc (R14) *)
+  - (* RS_annotate_cyc (R15) *)
     destruct Hwalks as [Hsibs Hc].
     inversion Hc as [|? ? Hcw _]; subst.
     split; [exact Hsibs |].
@@ -2822,7 +2822,19 @@ Proof.
       rewrite <- Hst in Hstep. discriminate.
 Qed.
 
-(** Confluence: trivial from determinism. *)
+(** Confluence.  The rewrite rules themselves are
+    non-deterministic (multiple rules may apply to
+    overlapping redexes), but the input, a trace
+    with the sequential ordering guaranteed by
+    Property prop:dse, is deterministic.  We
+    exploit this by realizing the step as a total
+    computable function over ordered children, so
+    the resulting rewriting is convergent: any two
+    reduction sequences from the same starting tree
+    produce the same normal form.  Critical pairs
+    (R6/R10, R7/R9) that would arise absent
+    Property prop:dse are discussed in the proofs
+    companion. *)
 Lemma fixpoint_star_det_deterministic :
   forall from_ T T1 T2,
     fixpoint_star_det from_ T T1 ->
@@ -3516,13 +3528,13 @@ Proof.
   - (* RS_leaf_chain (R6) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_node_leaf_chain (R11) *)
+  - (* RS_node_leaf_chain (R12) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_chain_seq (R9) *)
+  - (* RS_chain_seq (R10) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_same_token_chain (R10) *)
+  - (* RS_same_token_chain (R11) *)
     left. simpl. lia.
   - (* RS_lift *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
@@ -3537,10 +3549,10 @@ Proof.
   - (* RS_merge_closed_R9 *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_merge_node (R12) *)
+  - (* RS_merge_node (R13) *)
     left. rewrite !cc_RTree_sum, !length_app, !map_app,
                   !list_sum_app. simpl. lia.
-  - (* RS_annotate_arb (R13).  Produces Arbitrage label,
+  - (* RS_annotate_arb (R14).  Produces Arbitrage label,
        which is_labeled, while c is unlabeled. *)
     right. split.
     + (* count_children unchanged *)
@@ -3549,7 +3561,7 @@ Proof.
     + (* count_unlabeled strictly drops *)
       rewrite !cu_RTree_sum, !map_app, !list_sum_app.
       simpl. rewrite H5, H6. simpl. lia.
-  - (* RS_annotate_cyc (R14).  Produces Cycle label,
+  - (* RS_annotate_cyc (R15).  Produces Cycle label,
        which is_labeled, while c is unlabeled. *)
     right. split.
     + (* count_children unchanged *)
@@ -4244,7 +4256,7 @@ Proof.
               apply last_app_singleton.
         -- intros Hlbl. rewrite H0 in Hlbl. discriminate.
 
-  - (* R11: RS_node_leaf_chain *)
+  - (* R12: RS_node_leaf_chain *)
     apply chain_in_RTree_app in Hin.
     destruct Hin as [Hsibs | Hnew].
     + apply Hinv. apply chain_in_RTree_iff.
@@ -4286,7 +4298,7 @@ Proof.
               apply last_app_singleton.
         -- intros Hlbl. rewrite H1 in Hlbl. discriminate.
 
-  - (* R9: RS_chain_seq *)
+  - (* R10: RS_chain_seq *)
     apply chain_in_RTree_app in Hin.
     destruct Hin as [Hsibs | Hnew].
     + apply Hinv. apply chain_in_RTree_iff.
@@ -4326,7 +4338,7 @@ Proof.
            apply last_indep_of_default. discriminate.
       * intros Hlbl. rewrite H2 in Hlbl. discriminate.
 
-  - (* R10: RS_same_token_chain *)
+  - (* R11: RS_same_token_chain *)
     apply chain_in_RTree_iff in Hin.
     destruct Hin as [child [Hch Hin']].
     simpl in Hch. destruct Hch as [Heq | []]. subst child.
@@ -4472,7 +4484,7 @@ Proof.
            apply last_indep_of_default. discriminate.
       * intros Hlbl. rewrite H5 in Hlbl. discriminate.
 
-  - (* R12: RS_merge_node *)
+  - (* R13: RS_merge_node *)
     apply chain_in_RTree_app in Hin.
     destruct Hin as [Hsibs | Hnew].
     + apply Hinv. apply chain_in_RTree_iff.
@@ -4512,7 +4524,7 @@ Proof.
            apply last_indep_of_default. discriminate.
       * intros Hlbl. rewrite H6 in Hlbl. discriminate.
 
-  - (* R13: RS_annotate_arb *)
+  - (* R14: RS_annotate_arb *)
     apply chain_in_RTree_app in Hin.
     destruct Hin as [Hsibs | Hnew].
     + apply Hinv. apply chain_in_RTree_iff.
@@ -4539,7 +4551,7 @@ Proof.
         -- rewrite H2, Hcd. reflexivity.
       * intros _. rewrite H1, H2. exact H.
 
-  - (* R14: RS_annotate_cyc *)
+  - (* R15: RS_annotate_cyc *)
     apply chain_in_RTree_app in Hin.
     destruct Hin as [Hsibs | Hnew].
     + apply Hinv. apply chain_in_RTree_iff.
