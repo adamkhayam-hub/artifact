@@ -104,6 +104,8 @@ def load_compact():
                 "num_cycles": int(row["num_cycles"]),
                 "num_leftovers": int(row["num_leftovers"]),
                 "fixpoint_detected": fixpoint_detected,
+                "lending": int(row.get("lending", 0) or 0),
+                "flash_loan": int(row.get("flash_loan", 0) or 0),
                 "decode_ms": decode_ms,
                 "algo_ms": algo_ms,
             })

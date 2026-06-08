@@ -73,14 +73,15 @@ def main():
     p(f"Eigenphi txs in overlap: {eig_in_range:,}")
 
     p("\n" + "=" * 60)
-    p("OURS VERDICT DISTRIBUTION (normalized)")
+    p("SYSTEM VERDICT DISTRIBUTION (normalized)")
     p("=" * 60)
 
     verdicts = Counter()
     reason_combos = Counter()
     has_cycles = Counter()
     has_leftovers = Counter()
-    has_leftover_cycles = Counter()
+    has_lending = Counter()
+    has_flash = Counter()
     n_cycles_dist = Counter()
     total = len(rows)
     system_hash_verdict = {}
@@ -99,9 +100,10 @@ def main():
             has_cycles[verdict] += 1
         if r["num_leftovers"] > 0:
             has_leftovers[verdict] += 1
-            # num_leftovers tracks the "leftovers" field; used here as proxy
-            # for transfersInLeftoversCycles (lending-related structures)
-            has_leftover_cycles[verdict] += 1
+        if r.get("lending"):
+            has_lending[verdict] += 1
+        if r.get("flash_loan"):
+            has_flash[verdict] += 1
 
     p(f"Total Ours results: {total:,}")
     p()
@@ -118,9 +120,15 @@ def main():
     for verdict, count in has_leftovers.most_common():
         p(f"  {str(verdict):12s}  {count:>10,}")
 
-    p(f"\nWith leftover cycles (lending) [proxy: num_leftovers > 0]:")
-    for verdict, count in has_leftover_cycles.most_common():
-        p(f"  {str(verdict):12s}  {count:>10,}")
+    p(f"\nLending involvement [address registry hit in any transfer]:")
+    for verdict, count in has_lending.most_common():
+        pct = 100 * count / max(1, verdicts[verdict])
+        p(f"  {str(verdict):12s}  {count:>10,}  ({pct:.1f}% of tier)")
+
+    p(f"\nFlash loan involvement [matched borrow+repay pair, same asset+amount]:")
+    for verdict, count in has_flash.most_common():
+        pct = 100 * count / max(1, verdicts[verdict])
+        p(f"  {str(verdict):12s}  {count:>10,}  ({pct:.1f}% of tier)")
 
     # Fixpoint detection statistics
     p("\n" + "=" * 60)

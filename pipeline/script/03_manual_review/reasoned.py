@@ -63,8 +63,8 @@ def reason_transaction(filepath, addr_labels):
     lines = content.split("\n")
 
     # Skip unparseable files
-    if "NOT IN OURS" in content:
-        return None, "NOT_IN_OURS", "Transaction not found in Ours dataset."
+    if "NOT IN SYSTEM" in content:
+        return None, "NOT_IN_SYSTEM", "Transaction not found in Ours dataset."
     if "ERROR parsing" in content:
         return None, "PARSE_ERROR", "JSON parsing error (likely newer integer encoding)."
 

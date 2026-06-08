@@ -23,7 +23,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import csv
 import json
 import os
-import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -32,10 +31,10 @@ from pathlib import Path
 csv.field_size_limit(sys.maxsize)
 
 EVAL_DIR = Path(__file__).resolve().parent.parent.parent
-ARTIFACT_DIR = EVAL_DIR.parent
-BLOCKDB_DIR = ARTIFACT_DIR / "blockdb"
+REPO_ROOT = EVAL_DIR.parent.parent
 SAMPLES_DIR = EVAL_DIR / "output" / "samples"
-FORENSIC_DIR = EVAL_DIR / "output" / "cat4_forensic"
+DATA_DIR = EVAL_DIR / "data"
+FORENSIC_DIR = DATA_DIR / "cat4_forensic"
 SUMMARIES_DIR = EVAL_DIR / "output" / "summaries"
 SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,9 +42,8 @@ SAMPLE_FILE = SAMPLES_DIR / "05_manual_sample_cat4_eigenphi_only.csv"
 SUMMARY_CSV = FORENSIC_DIR / "summary.csv"
 OUT_TXT = SUMMARIES_DIR / "04_cat4/forensic.txt"
 
-DETECT_MODE = os.environ.get("DETECT_MODE", "skip")
-DETECT_CONFIG = os.environ.get("DETECT_CONFIG", "")
-USE_DOCKER = shutil.which("inspect_tx_offline") is None
+EXE = REPO_ROOT / "_build" / "default" / "debug" / "graph" / "debug_graph.exe"
+CONFIG = os.environ.get("ETHEREUM_CONFIG", "")
 
 
 def p(msg="", f=None):
@@ -54,77 +52,27 @@ def p(msg="", f=None):
         f.write(msg + "\n")
 
 
-def find_trace(tx_hash, block_number):
-    """Find trace + cft_input in blockdb for a given tx."""
-    for subdir in ["evaluation", "comparison", "220k", "1k", ""]:
-        base = BLOCKDB_DIR / subdir / str(block_number) if subdir else BLOCKDB_DIR / str(block_number)
-        trace = base / f"{tx_hash}.trace.json"
-        cft = base / f"{tx_hash}.cft_input.json"
-        if trace.exists() and cft.exists():
-            return str(trace), str(cft)
-    return None, None
-
-
-def run_inspect(tx_hash, block_number):
-    """Run detection on a single transaction. Returns True on success."""
+def run_debug_graph(tx_hash):
+    """Run debug_graph on a single transaction. Returns True on success."""
     tx_dir = FORENSIC_DIR / tx_hash
     if (tx_dir / "arbitrage.json").exists():
         return True  # already done
 
     tx_dir.mkdir(parents=True, exist_ok=True)
+    tx_file = Path("/tmp") / f"cat4_tx_{tx_hash[:8]}.json"
+    tx_file.write_text(f'["{tx_hash}"]')
 
-    if DETECT_MODE == "online":
-        # RPC mode: fetch trace from archive node
-        import tempfile, json
-        tx_file = Path(tempfile.mktemp(suffix=".json"))
-        tx_file.write_text(json.dumps([tx_hash]))
-        try:
-            cmd = [
-                "docker", "run", "--rm",
-                "-v", f"{tx_file}:/tmp/tx.json:ro",
-                "-v", f"{DETECT_CONFIG}:/tmp/config.json:ro",
-                "-v", f"{FORENSIC_DIR}:/forensic",
-                "detect-api", "inspect_tx",
-                "--config", "/tmp/config.json",
-                "--transaction", "/tmp/tx.json",
-                "--outdir", "/forensic",
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            return (tx_dir / "arbitrage.json").exists()
-        except (subprocess.TimeoutExpired, Exception) as e:
-            print(f"  Error: {e}")
-            return False
-        finally:
-            tx_file.unlink(missing_ok=True)
-    else:
-        # Offline mode: use pre-exported traces
-        trace_path, cft_path = find_trace(tx_hash, block_number)
-        if not trace_path:
-            print(f"  Trace not found for {tx_hash} (block {block_number})")
-            return False
-        try:
-            if USE_DOCKER:
-                cmd = [
-                    "docker", "run", "--rm",
-                    "-v", f"{BLOCKDB_DIR}:/blockdb:ro",
-                    "-v", f"{FORENSIC_DIR}:/forensic",
-                    "detect-api", "inspect_tx_offline",
-                    "--trace", trace_path.replace(str(BLOCKDB_DIR), "/blockdb"),
-                    "--cft-input", cft_path.replace(str(BLOCKDB_DIR), "/blockdb"),
-                    "--outdir", "/forensic",
-                ]
-            else:
-                cmd = [
-                    "inspect_tx_offline",
-                    "--trace", trace_path,
-                    "--cft-input", cft_path,
-                    "--outdir", str(FORENSIC_DIR),
-                ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            return (tx_dir / "arbitrage.json").exists()
-        except (subprocess.TimeoutExpired, Exception) as e:
-            print(f"  Error running inspect_tx_offline: {e}")
-            return False
+    try:
+        result = subprocess.run(
+            [str(EXE), "--config", CONFIG,
+             "--transaction", str(tx_file),
+             "--outdir", str(FORENSIC_DIR)],
+            capture_output=True, text=True, timeout=120)
+        tx_file.unlink(missing_ok=True)
+        return (tx_dir / "arbitrage.json").exists()
+    except (subprocess.TimeoutExpired, Exception):
+        tx_file.unlink(missing_ok=True)
+        return False
 
 
 def parse_result(tx_hash):
@@ -186,22 +134,20 @@ def main():
         print(f"ERROR: {SAMPLE_FILE} not found. Run step 5 first.")
         sys.exit(1)
 
-    if DETECT_MODE == "skip":
-        print("SKIPPED: no blockdb/ and no --online config.")
-        print("Run with --offline (needs blockdb/) or --online --config <path>")
-        return
-
-    if DETECT_MODE == "offline" and not BLOCKDB_DIR.exists():
-        print(f"ERROR: {BLOCKDB_DIR} not found.")
-        print("Place exported traces in artifact/blockdb/")
+    if not EXE.exists():
+        print(f"ERROR: {EXE} not found. Run 'make build-ocaml' first.")
         sys.exit(1)
 
-    # Read cat4 samples (tx_hash + block)
+    if not CONFIG:
+        print("ERROR: ETHEREUM_CONFIG not set. Source system.env first.")
+        sys.exit(1)
+
+    # Read cat4 samples
     samples = []
     with open(SAMPLE_FILE) as f:
         reader = csv.DictReader(f)
         for row in reader:
-            samples.append((row["tx_hash"], int(row["block"])))
+            samples.append(row["tx_hash"])
 
     FORENSIC_DIR.mkdir(parents=True, exist_ok=True)
     total = len(samples)
@@ -217,13 +163,13 @@ def main():
     with open(SUMMARY_CSV, "w") as f:
         f.write("tx_hash,verdict,reasons,num_cycles,num_leftovers,has_arbitrage,status,classification,detail\n")
 
-    for i, (tx_hash, block) in enumerate(samples):
+    for i, tx_hash in enumerate(samples):
         skip = (FORENSIC_DIR / tx_hash / "arbitrage.json").exists()
         if skip:
             print(f"[{i+1}/{total}] SKIP {tx_hash[:16]}... (done)")
         else:
             print(f"[{i+1}/{total}] {tx_hash[:16]}... ", end="", flush=True)
-            ok = run_inspect(tx_hash, block)
+            ok = run_debug_graph(tx_hash)
             print("OK" if ok else "FAILED")
 
         # Step 2: Parse and classify

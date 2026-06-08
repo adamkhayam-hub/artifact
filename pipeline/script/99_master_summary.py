@@ -105,11 +105,11 @@ def main():
         "has_cycles", "Total",
     )
     out += [""]
-    out += ["  --- to_ gap analysis ---"]
+    out += ["  --- Cat-4 breakdown (Eigenphi-only 200 sample) ---"]
     out += extract(
         SUMMARIES_DIR / "04_cat4/to_gap.txt",
-        "Yellow node", "Cycles but", "No cycles",
-        "false positive", "to_ limitation", "inner contract",
+        "Inner-address arbitrage", "Cross-token cycle",
+        "No canonical cycle",
     )
 
     # --- Cross-chain ---
@@ -163,10 +163,10 @@ def main():
             out.append(f"  {line.strip()}")
 
     for line in s27.splitlines():
-        if "Yellow node" in line:
-            out.append(f"  Cat4 to_ gap: {line.strip()}")
-        if "No cycles" in line:
-            out.append(f"  Cat4 Eigenphi FP: {line.strip()}")
+        if "Inner-address arbitrage" in line:
+            out.append(f"  {line.strip()}")
+        if "No canonical cycle" in line:
+            out.append(f"  {line.strip()}")
 
     out.append("")
 

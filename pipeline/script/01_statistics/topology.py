@@ -44,9 +44,7 @@ def main():
         verdict_count[verdict] += 1
         cycle_count_dist[(verdict, n_cycles)] += 1
 
-        # num_leftovers > 0 is used as a proxy for lending involvement
-        # (transfersInLeftoversCycles is not stored in the compact CSV)
-        if r["num_leftovers"] > 0:
+        if r.get("lending"):
             has_lending[verdict] += 1
 
     total_cycles = sum(
@@ -77,7 +75,7 @@ def main():
     p(f"  {'11+':>6s} {arb_11:>12,} {warn_11:>12,} {arb_11 + warn_11:>12,}")
 
     # Lending involvement
-    p(f"\nLENDING INVOLVEMENT [proxy: num_leftovers > 0]")
+    p(f"\nLENDING INVOLVEMENT [address registry hit]")
     p("-" * 60)
     for verdict in ["arbitrage", "warning"]:
         lending = has_lending.get(verdict, 0)

@@ -430,7 +430,7 @@ def main():
         for txt_file in sorted(folder_path.glob("tx_*.txt")):
             parsed = parse_inspect(txt_file)
 
-            if "NOT IN OURS" in parsed["raw"] or "ERROR" in parsed["raw"]:
+            if "NOT IN SYSTEM" in parsed["raw"] or "ERROR" in parsed["raw"]:
                 continue
 
             verdict, has_lending, review_text = review_transaction(parsed, labels)

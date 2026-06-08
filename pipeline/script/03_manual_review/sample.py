@@ -26,29 +26,6 @@ from config import (
     normalize_verdict, normalize_reasons, normalize_hash, classify_by_reasons,
 )
 
-EVAL_DIR = Path(__file__).resolve().parent.parent.parent
-ARTIFACT_DIR = EVAL_DIR.parent
-BLOCKDB_DIR = ARTIFACT_DIR / "blockdb"
-
-
-def get_available_blocks():
-    """Return set of block numbers available in blockdb/.
-    If blockdb/ doesn't exist, return None (no filtering)."""
-    if not BLOCKDB_DIR.exists():
-        return None
-    blocks = set()
-    for subdir in BLOCKDB_DIR.iterdir():
-        if subdir.is_dir():
-            for block_dir in subdir.iterdir():
-                if block_dir.is_dir():
-                    try:
-                        blocks.add(int(block_dir.name))
-                    except ValueError:
-                        pass
-    if not blocks:
-        return None
-    return blocks
-
 
 def extract_address(obj):
     """Extract an address string from either encoding format.
@@ -134,7 +111,10 @@ def main():
         reader = csv.reader(f)
         next(reader)
         for row in reader:
-            b = int(row[1])
+            try:
+                b = int(row[1])
+            except (ValueError, IndexError):
+                continue
             if b > system_max:
                 system_max = b
 
@@ -168,7 +148,10 @@ def main():
         next(reader)
         for row in reader:
             h = normalize_hash(row[0])
-            block = int(row[1])
+            try:
+                block = int(row[1])
+            except (ValueError, IndexError):
+                continue
             if block > overlap_max:
                 continue
             try:
@@ -196,21 +179,6 @@ def main():
     cat4 = list(eig_hashes - system_hashes)
 
     pools = {1: cat1, 2: cat2, 3: cat3, 4: cat4}
-
-    # Filter to available blocks if running offline
-    available_blocks = get_available_blocks()
-    if available_blocks is not None:
-        print(f"Offline mode: {len(available_blocks)} blocks in blockdb/")
-        for cat_num in pools:
-            if cat_num == 4:
-                pools[cat_num] = [h for h in pools[cat_num]
-                                  if eig_hash_block.get(h, -1) in available_blocks]
-            else:
-                pools[cat_num] = [h for h in pools[cat_num]
-                                  if system_all.get(h, (None,))[0] in available_blocks]
-    else:
-        print("RPC mode: sampling from full range")
-
     for cat_num, pool in sorted(pools.items()):
         print(f"Cat {cat_num} pool: {len(pool):,}")
 

@@ -25,7 +25,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import csv
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,8 +32,6 @@ from pathlib import Path
 csv.field_size_limit(sys.maxsize)
 
 EVAL_DIR = Path(__file__).resolve().parent.parent.parent
-ARTIFACT_DIR = EVAL_DIR.parent
-BLOCKDB_DIR = ARTIFACT_DIR / "blockdb"
 DATA_DIR = EVAL_DIR / "data"
 SUMMARIES_DIR = EVAL_DIR / "output" / "summaries"
 SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
@@ -42,8 +39,8 @@ SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
 THREEWAY_CSV = DATA_DIR / "system_arbis_3wayeval.csv"
 EIGENPHI_CSV = DATA_DIR / "eigenphi_arbis_txs.csv"
 ARBINET_CSV = DATA_DIR / "arbinet" / "arbinet1k.csv"
-GAP_DIR = EVAL_DIR / "output" / "3way_gap"
-HASHES_JSON = EVAL_DIR / "output" / "3way_gap_hashes.json"
+GAP_DIR = DATA_DIR / "3way_gap"
+HASHES_JSON = DATA_DIR / "3way_gap_hashes.json"
 OUT_TXT = SUMMARIES_DIR / "05_arbinet/gap.txt"
 
 FIRST = 24_100_000
@@ -108,107 +105,6 @@ def extract_hashes():
     print(f"Total to inspect: {len(all_hashes)}")
     print(f"Written to: {HASHES_JSON}")
     return result
-
-
-def find_trace(tx_hash):
-    """Find trace + cft_input in blockdb for a gap tx (1K range)."""
-    for subdir in ["1k", "220k", ""]:
-        base = BLOCKDB_DIR / subdir if subdir else BLOCKDB_DIR
-        if not base.exists():
-            continue
-        for block_dir in base.iterdir():
-            if not block_dir.is_dir():
-                continue
-            trace = block_dir / f"{tx_hash}.trace.json"
-            cft = block_dir / f"{tx_hash}.cft_input.json"
-            if trace.exists() and cft.exists():
-                return str(trace), str(cft)
-    return None, None
-
-
-DETECT_MODE = os.environ.get("DETECT_MODE", "skip")
-DETECT_CONFIG = os.environ.get("DETECT_CONFIG", "")
-
-
-def run_inspect(tx_hash):
-    """Run detection on a gap transaction. Returns True on success."""
-    tx_dir = GAP_DIR / tx_hash
-    if (tx_dir / "arbitrage.json").exists():
-        return True
-
-    tx_dir.mkdir(parents=True, exist_ok=True)
-
-    if DETECT_MODE == "online":
-        import tempfile, json
-        tx_file = Path(tempfile.mktemp(suffix=".json"))
-        tx_file.write_text(json.dumps([tx_hash]))
-        try:
-            cmd = [
-                "docker", "run", "--rm",
-                "-v", f"{tx_file}:/tmp/tx.json:ro",
-                "-v", f"{DETECT_CONFIG}:/tmp/config.json:ro",
-                "-v", f"{GAP_DIR}:/gap",
-                "detect-api", "inspect_tx",
-                "--config", "/tmp/config.json",
-                "--transaction", "/tmp/tx.json",
-                "--outdir", "/gap",
-            ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            return (tx_dir / "arbitrage.json").exists()
-        except (subprocess.TimeoutExpired, Exception):
-            return False
-        finally:
-            tx_file.unlink(missing_ok=True)
-    else:
-        trace_path, cft_path = find_trace(tx_hash)
-        if not trace_path:
-            return False
-        use_docker = shutil.which("inspect_tx_offline") is None
-        try:
-            if use_docker:
-                cmd = [
-                    "docker", "run", "--rm",
-                    "-v", f"{BLOCKDB_DIR}:/blockdb:ro",
-                    "-v", f"{GAP_DIR}:/gap",
-                    "detect-api", "inspect_tx_offline",
-                    "--trace", trace_path.replace(str(BLOCKDB_DIR), "/blockdb"),
-                    "--cft-input", cft_path.replace(str(BLOCKDB_DIR), "/blockdb"),
-                    "--outdir", "/gap",
-                ]
-            else:
-                cmd = [
-                    "inspect_tx_offline",
-                    "--trace", trace_path,
-                    "--cft-input", cft_path,
-                    "--outdir", str(GAP_DIR),
-                ]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            return (tx_dir / "arbitrage.json").exists()
-        except (subprocess.TimeoutExpired, Exception):
-            return False
-
-
-def generate_dots(categories):
-    """Step 2: run inspect_tx_offline on all gap transactions."""
-    GAP_DIR.mkdir(parents=True, exist_ok=True)
-    all_hashes = []
-    for hashes in categories.values():
-        all_hashes.extend(hashes)
-
-    total = len(all_hashes)
-    ok = 0
-    for i, tx_hash in enumerate(all_hashes):
-        skip = (GAP_DIR / tx_hash / "arbitrage.json").exists()
-        if skip:
-            ok += 1
-            continue
-        print(f"  [{i+1}/{total}] {tx_hash[:16]}... ", end="", flush=True)
-        success = run_inspect(tx_hash)
-        print("OK" if success else "SKIP (no trace)")
-        if success:
-            ok += 1
-
-    print(f"  Generated: {ok}/{total}")
 
 
 def has_yellow_node(dot_path):
@@ -317,23 +213,17 @@ def analyze(categories):
 
 
 def main():
-    if DETECT_MODE == "skip":
-        print("SKIPPED: no blockdb/ and no --online config.")
-        print("Run with --offline (needs blockdb/) or --online --config <path>")
-        return
-
     if "--extract" in sys.argv or not HASHES_JSON.exists():
         categories = extract_hashes()
     else:
         with open(HASHES_JSON) as f:
             categories = json.load(f)
 
-    # Step 2: generate DOTs
-    mode_label = "RPC" if DETECT_MODE == "online" else "blockdb"
-    print(f"\nStep 2: generating DOTs ({mode_label})...")
-    generate_dots(categories)
+    if "--extract" in sys.argv:
+        print("\nStep 1 done. Now run debug_graph on these txs.")
+        print(f"Output to: {GAP_DIR}/")
+        return
 
-    # Step 3: analyze DOTs
     analyze(categories)
 
 

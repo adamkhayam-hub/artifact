@@ -18,6 +18,9 @@ import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from lending_registry import detect_lending  # noqa: E402
+
 csv.field_size_limit(sys.maxsize)
 
 EVAL_DIR = Path(__file__).resolve().parent.parent
@@ -91,7 +94,7 @@ def main():
         writer.writerow([
             "tx_hash", "block", "verdict", "reasons",
             "num_cycles", "num_leftovers",
-            "fixpoint_detected",
+            "fixpoint_detected", "lending", "flash_loan",
             "decode_ms", "algo_ms"
         ])
 
@@ -115,7 +118,7 @@ def main():
         writer.writerow([
             "tx_hash", "block", "verdict", "reasons",
             "num_cycles", "num_leftovers",
-            "fixpoint_detected",
+            "fixpoint_detected", "lending", "flash_loan",
             "decode_ms", "algo_ms"
         ])
 
@@ -158,11 +161,13 @@ def main():
                 rr = resume.get("resume", {})
                 num_cycles = len(rr.get("transfersInCycles", []))
                 num_leftovers = len(rr.get("leftovers", []))
+                lending, flash_loan = detect_lending(rr)
 
                 writer.writerow([
                     tx_hash, block, verdict, reasons,
                     num_cycles, num_leftovers,
                     fixpoint_detected,
+                    int(lending), int(flash_loan),
                     decode_ms, algo_ms
                 ])
                 fhash.write(tx_hash + "\n")

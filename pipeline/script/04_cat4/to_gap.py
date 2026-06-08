@@ -23,10 +23,11 @@ import subprocess
 from pathlib import Path
 
 EVAL_DIR = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = EVAL_DIR / "data"
 SUMMARIES_DIR = EVAL_DIR / "output" / "summaries"
 SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
 
-CAT4_DIR = EVAL_DIR / "output" / "cat4_forensic"
+CAT4_DIR = DATA_DIR / "cat4_forensic"
 SUMMARY_CSV = CAT4_DIR / "summary.csv"
 OUT_TXT = SUMMARIES_DIR / "04_cat4/to_gap.txt"
 
@@ -139,18 +140,18 @@ def main():
     else:
         y_pct = c_pct = n_pct = 0
 
-    p(f"  Yellow node (to_ gap):      {len(yellow_txs):>4}"
-      f"  ({y_pct:.1f}%)  — real arbitrage, fixpoint detects,"
-      f" classification misses")
-    p(f"  Cycles but no yellow:       {len(cycles_no_yellow_txs):>4}"
-      f"  ({c_pct:.1f}%)  — structural cycles, not arbitrages"
-      f" (cross-token)")
-    p(f"  No cycles at all:           {len(no_cycles_txs):>4}"
+    p(f"  Inner-address arbitrage:     {len(yellow_txs):>4}"
+      f"  ({y_pct:.1f}%)  — our misses: fixpoint detects the cycle,"
+      f" classifier does not surface it")
+    p(f"  Cross-token cycle:           {len(cycles_no_yellow_txs):>4}"
+      f"  ({c_pct:.1f}%)  — structural cycle with"
+      f" tau_in != tau_out (not arbitrage)")
+    p(f"  No canonical cycle:          {len(no_cycles_txs):>4}"
       f"  ({n_pct:.1f}%)  — Eigenphi false positives")
     p()
 
     p("-" * 60)
-    p("YELLOW NODE TRANSACTIONS (to_ gap)")
+    p("INNER-ADDRESS ARBITRAGES (our misses)")
     p("-" * 60)
     for tx in yellow_txs:
         p(f"  0x{tx}")

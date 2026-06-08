@@ -2,9 +2,10 @@
 18_arbinet_comparison.py — Three-way comparison: Ours vs ArbiNet vs Eigenphi.
 
 Setup:
-    ArbiNet predictions for the comparison block range are shipped in
-    `data/arbinet/` (pre-computed). No separate setup is needed to run
-    this script in offline mode.
+    1. Clone ArbiNet fork: git clone https://<anonymized>/arbinet-fork
+    2. Set ARBINET_DIR below to the clone path
+    3. Run ArbiNet inference on the selected blocks (see run_arbinet.sh)
+    4. Place ArbiNet results in data/arbinet_results.csv
 
 Reads:
     data/system_compact.csv       (Ours verdicts, from 00_preprocess.py)
@@ -251,7 +252,7 @@ def main():
 
         # Ours-exclusive breakdown by verdict tier
         p("-" * 70, out)
-        p("OURS-EXCLUSIVE BREAKDOWN", out)
+        p("SYSTEM-EXCLUSIVE BREAKDOWN", out)
         p("-" * 70, out)
         exclusive_confirmed = 0
         exclusive_attempted = 0

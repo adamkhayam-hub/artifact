@@ -290,7 +290,7 @@ def main():
                     f"TRANSACTION: {tx_hash}\n"
                     f"BLOCK: {block}\n"
                     f"{'=' * 70}\n"
-                    f"NOT IN OURS DATASET\n\n"
+                    f"NOT IN SYSTEM DATASET\n\n"
                     f"EIGENPHI STATUS:\n"
                     f"  In Eigenphi main set:     {'YES' if tx_hash in eig_hashes else 'NO'}\n"
                 )
@@ -304,7 +304,7 @@ def main():
                 if line.startswith("Verdict:"):
                     verdict_line = line.split(":", 1)[1].strip()
                     break
-                elif "NOT IN OURS" in line:
+                elif "NOT IN SYSTEM" in line:
                     verdict_line = "not in Ours"
                     break
             print(f"  [{i+1:2d}/{len(rows)}] {tx_hash[:14]}...  {verdict_line}")

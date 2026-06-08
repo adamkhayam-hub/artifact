@@ -11,6 +11,7 @@ rocq/*.vo
 rocq/*.vok
 rocq/*.vos
 .vscode
+.lia.cache
 
 # Data dirs: shipped as top-level tarballs, extracted by install.sh
 blockdb/

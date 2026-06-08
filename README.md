@@ -113,8 +113,9 @@ needed).
 
 **Location:** `rocq/Arbitrage.v`
 
-A single self-contained file (84 lemmas, 2,471 lines,
-0 Admitted, 0 axioms) that mechanizes all five theorems
+A single self-contained file (136 lemmas, 7 theorems,
+3 corollaries, 4,710 lines, 0 Admitted, 0 axioms used
+in the proofs) that mechanizes all five theorems
 from the paper:
 
 | Theorem | Rocq name | What it proves |
@@ -125,10 +126,12 @@ from the paper:
 | Thm 4 (Confluence) | `confluence` | Unique normal form |
 | Thm 5 (Decidable equiv.) | `decidable_equivalence` | Word problem is decidable |
 
-Each of the 15 rewriting rules from Table 1 is a named
-constructor in the Rocq specification. The structural
-predicates (`is_burn`, `is_mint`, `is_singleton_router`)
-are abstract Parameters; all proofs proceed by case
+Each of the 15 rewriting rules from Table 1 (R1--R15)
+is a named constructor in the Rocq specification; R16
+(post-rewriting validation) is modeled as a predicate.
+The structural predicates (`is_burn`, `is_mint`,
+`is_singleton_router`, `is_token_contract`) are
+abstract Parameters; all proofs proceed by case
 analysis on the boolean value, making the formalization
 valid for any EVM-compatible chain.
 
@@ -209,15 +212,15 @@ This executes 29 steps. Results appear in
 |-------|------|------------|
 | 0 | Preprocess CSV | `output/data/system_compact.csv` |
 | 1 | Exploration + fixpoint coverage | 98.7% fixpoint, 1.3% promotion |
-| 2 | Accuracy (vs Eigenphi) | 83% overlap, 64,340 exclusive |
-| 3 | Topology | 1,889,755 cycles, batching stats |
-| 4 | Performance | P50=0.04ms algo, 0.19ms total |
-| 5 | Attempted arbitrages | 437,409 (43%) |
+| 2 | Accuracy (vs Eigenphi) | 83.5% recall, 60,199 exclusive confirmed |
+| 3 | Topology | 940,760 cycles, batching stats |
+| 4 | Performance | P50=0.07ms algo, 0.25ms total |
+| 5 | Attempted arbitrages | 245,497 (31.1%) |
 | 6 | Bot concentration | Top-10 senders |
 | 7-8 | Temporal + gas | Distribution plots |
 | 9 | Figures | PDFs for the paper |
 | 10-18 | Manual validation (see categories below) | 500 txs, zero false positives |
-| 19-20 | Forensic analysis of baseline-exclusive txs | 63.5% at inner addresses, 8.5% baseline FP |
+| 19-20 | Forensic analysis of Eigenphi-only txs | 63.5% Eigenphi false positives (no canonical cycle), 27.5% cross-token routing (not arbitrages), 9.0% inner-address arbitrages (our misses) |
 | 21-24 | ArbiNet three-way comparison | 81% overlap, gap analysis |
 | 25-27 | Cross-chain | Arbitrum (50 confirmed), BSC (88 confirmed) |
 | 28 | Master summary | All paper numbers in one file |
@@ -236,23 +239,30 @@ produces four categories of transactions:
 - **Category 2 (Ours-only confirmed)**: transactions
   our system flags as arbitrage but Eigenphi does not.
   These are our exclusive detections. We sample 100
-  and verify all are genuine (63% involve flash loans,
+  and verify all are genuine (51% involve flash loans,
   invisible to event-based detectors).
 
 - **Category 3 (Ours-only warnings)**: transactions
   our system flags with a warning (structural cycle
   found but not confirmed as profitable). We sample
   100 and verify all contain real cyclic structures
-  (76% are attempted arbitrages that lost money).
+  (78% are attempted arbitrages that lost money).
 
 - **Category 4 (Eigenphi-only)**: transactions Eigenphi
   flags but our system does not classify. We sample 200
-  and run our detection tool on each. The forensic
-  analysis reveals that 63.5% contain cycles our
-  fixpoint detects at inner contract addresses (not
-  surfaced due to conservative classification scope),
-  28% are cross-token routing (not arbitrages), and
-  8.5% are Eigenphi false positives.
+  and run our detection tool on each. All 200 receive
+  a non-arbitrage classification. The canonical forms
+  partition into three groups: 63.5% have no arbitrage
+  cycle in canonical form (Eigenphi labels them
+  incorrectly: simple transfers, wrap/unwrap, RWA
+  mints, yield harvests), 27.5% contain cross-token
+  cycles that exit in a different token from the
+  entry (not arbitrages under
+  $\tau_{\mathrm{in}} =_\tau \tau_{\mathrm{out}}$
+  closure), and 9.0% are genuine arbitrages at inner
+  contract addresses that the fixpoint detects but
+  the classification scope does not surface (the only
+  true misses by our system).
 
 ### Input data files
 
@@ -670,12 +680,12 @@ found no cyclic structure (`"arbitrage": null`).
 | Paper claim | How to verify | Expected result |
 |-------------|---------------|-----------------|
 | Five formal properties | `rocq compile Arbitrage.v` | Compiles with 0 errors |
-| 457,841 confirmed arbitrages | Pipeline step 1 | `explore.txt`: confirmed = 457,841 |
-| 83% Eigenphi overlap | Pipeline step 2 | `accuracy.txt`: 539,675 / 649,790 |
+| 469,801 confirmed arbitrages | Pipeline step 1 | `explore.txt`: confirmed = 469,801 |
+| 83.5% Eigenphi recall | Pipeline step 2 | `accuracy.txt`: 542,279 / 649,790 |
 | 81% ArbiNet overlap | Pipeline step 22 | `comparison.txt`: 81% coverage |
 | No FP in confirmed tier | Pipeline step 18 | `manual_review_summary.txt`: 0 FP in Cat 1 + Cat 2 |
-| 64,340 exclusive confirmed | Pipeline step 2 | `accuracy.txt`: 64,340 exclusive |
-| 437,409 attempted arbitrages | Pipeline step 5 | `attempted.txt`: 43.0% |
+| 60,199 exclusive confirmed | Pipeline step 2 | `accuracy.txt`: 60,199 exclusive |
+| 245,497 attempted arbitrages | Pipeline step 5 | `attempted.txt`: 31.1% |
 | 98.7% fixpoint coverage | Pipeline step 1 | `explore.txt`: 98.7% fixpoint |
 | Three-chain portability | Cross-chain Docker commands | Same binary, different chains |
 | Any individual transaction | `inspect_tx` or `inspect_tx_offline` | Verdict + DOTs + profit |

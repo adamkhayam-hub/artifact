@@ -77,7 +77,7 @@ def main():
 
     # --- Cross-reference by category ---
     p("\n" + "=" * 70)
-    p("CROSS-REFERENCE: OURS CATEGORIES vs EIGENPHI")
+    p("CROSS-REFERENCE: SYSTEM CATEGORIES vs EIGENPHI")
     p("=" * 70)
 
     categories = [

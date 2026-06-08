@@ -114,7 +114,7 @@ def analyze_transaction(filepath, addr_labels):
     """Analyze a single transaction and return a reasoned verdict."""
     content = filepath.read_text()
 
-    if "NOT IN OURS" in content:
+    if "NOT IN SYSTEM" in content:
         tx_match = re.search(r"TRANSACTION: (0x[0-9a-f]+)", content)
         eigenphi_main = "In Eigenphi main set:     YES" in content
         return {

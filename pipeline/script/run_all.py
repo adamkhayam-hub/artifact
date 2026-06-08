@@ -2,11 +2,9 @@
 Run the full evaluation pipeline.
 
 Usage:
-    python3 script/run_all.py                           # run all steps (auto-detect mode)
-    python3 script/run_all.py --offline                 # force offline mode (uses blockdb/)
-    python3 script/run_all.py --online --config cfg.json # RPC mode (uses archive node)
-    python3 script/run_all.py --from 5                  # resume from step 5
-    python3 script/run_all.py --clean                   # clean outputs first, then run all
+    python3 script/run_all.py          # run all steps
+    python3 script/run_all.py --clean  # clean outputs first, then run all
+    python3 script/run_all.py --from 5 # resume from step 5
 
 Steps:
     0.   Preprocess            (00) — single pass over 26GB CSV
@@ -224,8 +222,7 @@ def run_step(step_num, script_name, description, expected_outputs=None):
 
 def main():
     args = sys.argv[1:]
-    start_from = 0
-    end_at = 999
+    start_from = 1
 
     if "--clean-all" in args:
         clean(full=True)
@@ -238,41 +235,11 @@ def main():
         idx = args.index("--from")
         start_from = int(args[idx + 1])
 
-    if "--to" in args:
-        idx = args.index("--to")
-        end_at = int(args[idx + 1])
-
-    # Detection mode for steps 19-20, 24 (forensic + gap)
-    import os
-    if "--online" in args:
-        if "--config" in args:
-            cfg_idx = args.index("--config")
-            os.environ["DETECT_MODE"] = "online"
-            os.environ["DETECT_CONFIG"] = str(Path(args[cfg_idx + 1]).resolve())
-            print(f"Mode: ONLINE (RPC via {os.environ['DETECT_CONFIG']})")
-        else:
-            print("ERROR: --online requires --config <path_to_config.json>")
-            sys.exit(1)
-    elif "--offline" in args:
-        os.environ["DETECT_MODE"] = "offline"
-        print("Mode: OFFLINE (using blockdb/)")
-    else:
-        # Auto-detect
-        artifact_dir = EVAL_DIR.parent
-        blockdb = artifact_dir / "blockdb"
-        if blockdb.exists() and any(blockdb.iterdir()):
-            os.environ["DETECT_MODE"] = "offline"
-            print("Mode: OFFLINE (auto-detected blockdb/)")
-        else:
-            os.environ["DETECT_MODE"] = "skip"
-            print("Mode: SKIP forensic steps (no blockdb/, no --online)")
-    print()
-
     ensure_output_dirs()
     total_start = time.time()
 
     for step_num, script_name, description, expected in STEPS:
-        if step_num < start_from or step_num > end_at:
+        if step_num < start_from:
             print(f"  Skipping step {step_num}: {description}")
             continue
         run_step(step_num, script_name, description, expected)

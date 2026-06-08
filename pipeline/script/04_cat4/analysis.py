@@ -25,7 +25,8 @@ from collections import Counter
 csv.field_size_limit(sys.maxsize)
 
 EVAL_DIR = Path(__file__).resolve().parent.parent.parent
-FORENSIC_DIR = EVAL_DIR / "output" / "cat4_forensic"
+DATA_DIR = EVAL_DIR / "data"
+FORENSIC_DIR = DATA_DIR / "cat4_forensic"
 SUMMARIES_DIR = EVAL_DIR / "output" / "summaries"
 SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
 
