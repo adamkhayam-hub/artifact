@@ -22,8 +22,8 @@ blockdb_parts/
   blockdb.tar.gz.part-ad       81557049
 
 pipeline/data_parts/
-  data.tar.gz.part-aa .. part-ai   99614720 each
-  data.tar.gz.part-aj              43883946
+  data.tar.gz.part-aa .. part-ae   99614720 each
+  data.tar.gz.part-af              46059520
 
 detect-api_parts_arm64/
   detect-api.tar.gz.part-aa .. part-al   99614720 each
