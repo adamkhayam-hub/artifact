@@ -114,7 +114,7 @@ needed).
 **Location:** `rocq/Arbitrage.v`
 
 A single self-contained file (136 lemmas, 7 theorems,
-3 corollaries, 4,710 lines, 0 Admitted, 0 axioms used
+3 corollaries, 4,738 lines, 0 Admitted, 0 axioms used
 in the proofs) that mechanizes all five theorems
 from the paper:
 
