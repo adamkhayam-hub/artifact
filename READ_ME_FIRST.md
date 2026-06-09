@@ -26,12 +26,12 @@ pipeline/data_parts/
   data.tar.gz.part-af              46059520
 
 detect-api_parts_arm64/
-  detect-api.tar.gz.part-aa .. part-al   99614720 each
-  detect-api.tar.gz.part-am                3701096
+  detect-api.tar.gz.part-aa .. part-ax   99614720 each
+  detect-api.tar.gz.part-ay               17990566
 
 detect-api_parts_amd64/
   detect-api.tar.gz.part-aa .. part-al   99614720 each
-  detect-api.tar.gz.part-am                 665429
+  detect-api.tar.gz.part-am                7571358
 ```
 
 Quick check:
