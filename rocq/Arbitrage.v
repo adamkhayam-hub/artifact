@@ -24,6 +24,7 @@
     Date: March 2026
 *)
 
+Set Warnings "-register-all".
 From Stdlib Require Import List.
 From Stdlib Require Import Arith.
 From Stdlib Require Import Lia.
