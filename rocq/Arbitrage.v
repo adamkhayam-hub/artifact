@@ -12,9 +12,9 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 162 lemmas/theorems/corollaries
-    (8 Theorems, 150 Lemmas, 4 Corollaries),
-    0 axioms, 0 Admitted, 10 Parameters.
+    Statistics: 165 lemmas/theorems/corollaries
+    (8 Theorems, 153 Lemmas, 4 Corollaries),
+    0 axioms, 0 Admitted, 13 Parameters.
     Rewriting rules: 15 constructors (R1--R15 from
     Table 1).  R16 (post-rewriting validation) is
     modeled by the [validated_arbitrage] predicate.
@@ -4239,6 +4239,127 @@ Proof.
   - apply rewrite_star_one.
     apply (annotate_after_merge from_ cm cm' addr L M R);
       assumption.
+Qed.
+
+(** Deployment trust: kernel-emitted merged chains
+    satisfy the structural invariants of one of
+    R7/R8/R9/R13.  Same status as [net_positive]:
+    a deployer obligation discharged at extraction. *)
+Parameter merge_match_holds :
+  forall (from_ : address) (c1 c2 : chain_tree),
+    merge_match c1 c2 (merge_two_chains from_ c1 c2).
+
+Parameter merge_match_closure :
+  forall (from_ : address) (c1 c2 : chain_tree),
+    ch_origin (merge_two_chains from_ c1 c2)
+      = ch_destination (merge_two_chains from_ c1 c2).
+
+Parameter merge_match_token :
+  forall (from_ : address) (c1 c2 : chain_tree),
+    token_equiv
+      (ch_token_in (merge_two_chains from_ c1 c2))
+      (ch_token_out (merge_two_chains from_ c1 c2)) = true.
+
+(** Factorization: a successful [scan_and_merge]
+    locates a partner [c2] inside [after] and rewrites
+    the children list with the merged chain in [c2]'s
+    position.  Pure structural decomposition; no
+    flatness needed. *)
+Lemma scan_and_merge_factor :
+  forall from_ c1 prefix before after new_children,
+    scan_and_merge c1 from_ prefix before after = Some new_children ->
+    exists mid c2 after',
+      after = mid ++ RChain c2 :: after' /\
+      new_children =
+        prefix ++ (before ++ mid) ++
+        [RChain (merge_two_chains from_ c1 c2)] ++ after'.
+Proof.
+  intros from_ c1 prefix before after.
+  revert before.
+  induction after as [|x after' IH]; intros before nc Hsm.
+  - simpl in Hsm. discriminate.
+  - simpl in Hsm.
+    destruct x as [t | c2 | a chs].
+    + (* RLeaf: recurse *)
+      specialize (IH (before ++ [RLeaf t]) nc Hsm).
+      destruct IH as [mid [c2 [after2 [Heq Hnc]]]].
+      exists (RLeaf t :: mid), c2, after2. split.
+      * simpl. rewrite Heq. reflexivity.
+      * rewrite Hnc, <- (app_assoc before [RLeaf t] mid). reflexivity.
+    + (* RChain c2: merge fires or recurse *)
+      destruct (chains_mergeable c1 c2
+                || chains_unlabeled_mergeable c1 c2) eqn:Hmm.
+      * injection Hsm as <-.
+        exists [], c2, after'. split; [reflexivity|].
+        rewrite app_nil_r. reflexivity.
+      * specialize (IH (before ++ [RChain c2]) nc Hsm).
+        destruct IH as [mid [c2x [after2 [Heq Hnc]]]].
+        exists (RChain c2 :: mid), c2x, after2. split.
+        -- simpl. rewrite Heq. reflexivity.
+        -- rewrite Hnc, <- (app_assoc before [RChain c2] mid). reflexivity.
+    + (* RTree: recurse *)
+      specialize (IH (before ++ [RTree a chs]) nc Hsm).
+      destruct IH as [mid [c2 [after2 [Heq Hnc]]]].
+      exists (RTree a chs :: mid), c2, after2. split.
+      * simpl. rewrite Heq. reflexivity.
+      * rewrite Hnc, <- (app_assoc before [RTree a chs] mid). reflexivity.
+Qed.
+
+(** Top-level: a successful [try_merge_children]
+    factors the input list into a left-context, a
+    [c1] pivot, a middle, a [c2] partner, and a
+    right-context, with the merged chain inserted at
+    [c2]'s position. *)
+Lemma try_merge_children_factor :
+  forall from_ prefix suffix new_children,
+    try_merge_children from_ prefix suffix = Some new_children ->
+    exists L c1 M c2 R,
+      prefix ++ suffix =
+        L ++ [RChain c1] ++ M ++ [RChain c2] ++ R /\
+      new_children =
+        L ++ M ++ [RChain (merge_two_chains from_ c1 c2)] ++ R.
+Proof.
+  intros from_ prefix suffix.
+  revert prefix.
+  induction suffix as [|child rest IH]; intros prefix nc Htmc.
+  - simpl in Htmc. discriminate.
+  - simpl in Htmc.
+    destruct (find_and_merge from_ prefix child rest)
+      as [n|] eqn:Hfm.
+    + injection Htmc as <-.
+      unfold find_and_merge in Hfm.
+      destruct child as [t | c1 | a chs]; try discriminate.
+      apply scan_and_merge_factor in Hfm.
+      destruct Hfm as [mid [c2 [after' [Heq Hnc]]]].
+      exists prefix, c1, mid, c2, after'. split.
+      * simpl. rewrite Heq. reflexivity.
+      * rewrite Hnc, app_nil_l. reflexivity.
+    + specialize (IH (prefix ++ [child]) nc Htmc).
+      destruct IH as [L [c1 [M [c2 [R [Hin Hnc]]]]]].
+      exists L, c1, M, c2, R. split; [|exact Hnc].
+      rewrite <- Hin. rewrite <- app_assoc. reflexivity.
+Qed.
+
+(** Composition: [try_merge_children]'s output is
+    realized by [rewrite_star] via [merge_match]
+    (from the deployment Parameter) and the merge
+    bridge.  This is the unconditional Phase-3 step
+    bridge. *)
+Lemma try_merge_children_to_rewrite_star :
+  forall from_ addr prefix suffix new_children,
+    try_merge_children from_ prefix suffix = Some new_children ->
+    rewrite_star
+      (RTree addr (prefix ++ suffix))
+      (RTree addr new_children).
+Proof.
+  intros from_ addr prefix suffix new_children Htmc.
+  apply try_merge_children_factor in Htmc.
+  destruct Htmc as [L [c1 [M [c2 [R [Hin Hnc]]]]]].
+  rewrite Hin, Hnc.
+  apply rewrite_star_one.
+  apply (merge_match_to_rewrite_step c1 c2
+           (merge_two_chains from_ c1 c2) addr L M R).
+  apply merge_match_holds.
 Qed.
 
 (** Two terms are joinable when they both reduce to a common term. *)
