@@ -11,8 +11,8 @@ approximately 30 seconds.
 
 ## Overview
 
-`Arbitrage.v` is a self-contained file (137 lemmas,
-8 theorems, 4 corollaries, 4,859 lines, 0 Admitted,
+`Arbitrage.v` is a self-contained file (150 lemmas,
+8 theorems, 4 corollaries, 5,305 lines, 0 Admitted,
 0 axioms) that mechanizes all five theorems from
 the paper. It requires only the Rocq standard
 library.

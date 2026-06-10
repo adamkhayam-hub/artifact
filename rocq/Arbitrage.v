@@ -12,9 +12,9 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 146 lemmas/theorems/corollaries
-    (7 Theorems, 136 Lemmas, 3 Corollaries),
-    0 axioms, 0 Admitted.
+    Statistics: 162 lemmas/theorems/corollaries
+    (8 Theorems, 150 Lemmas, 4 Corollaries),
+    0 axioms, 0 Admitted, 10 Parameters.
     Rewriting rules: 15 constructors (R1--R15 from
     Table 1).  R16 (post-rewriting validation) is
     modeled by the [validated_arbitrage] predicate.
@@ -579,7 +579,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       different intermediaries into one structure
       (typical multi-hop arbitrage shape).
       [eth_graph.ml:990] *)
-  | RS_merge_endpoints : forall c1 c2 cm addr siblings,
+  | RS_merge_endpoints : forall c1 c2 cm addr L M R,
       ch_origin c1 = ch_origin c2 ->
       ch_destination c1 = ch_destination c2 ->
       ch_origin c1 <> ch_destination c1 ->
@@ -590,8 +590,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_label cm = Merging ->
       chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c1; RChain c2]))
-        (RTree addr (siblings ++ [RChain cm]))
+        (RTree addr (L ++ [RChain c1] ++ M ++ [RChain c2] ++ R))
+        (RTree addr (L ++ M ++ [RChain cm] ++ R))
 
   (** R8: cycle merge-add.  Both chains are cycles at
       the same address (s = d), and all four tokens
@@ -600,7 +600,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       is the additive case, distinct from R7 because
       it operates on cycles rather than on parallel
       paths.  [eth_graph.ml:1046] *)
-  | RS_merge_add : forall c1 c2 cm addr siblings,
+  | RS_merge_add : forall c1 c2 cm addr L M R,
       ch_origin c1 = ch_origin c2 ->
       ch_destination c1 = ch_destination c2 ->
       ch_origin c1 = ch_destination c1 ->
@@ -612,8 +612,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_label cm = Merging ->
       chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c1; RChain c2]))
-        (RTree addr (siblings ++ [RChain cm]))
+        (RTree addr (L ++ [RChain c1] ++ M ++ [RChain c2] ++ R))
+        (RTree addr (L ++ M ++ [RChain cm] ++ R))
 
   (** R9: closed-cycle parallel merge (R7-closed).
       Two cycles share the same origin (s = d on both)
@@ -621,7 +621,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       may differ.  Specialised sibling of R7 for closed
       chains: captures parallel closed-cycle arbitrages
       whose return legs use different output tokens. *)
-  | RS_merge_closed_R9 : forall c1 c2 cm addr siblings,
+  | RS_merge_closed_R9 : forall c1 c2 cm addr L M R,
       ch_origin c1 = ch_destination c1 ->
       ch_origin c2 = ch_destination c2 ->
       ch_origin c1 = ch_origin c2 ->
@@ -631,8 +631,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_label cm = Merging ->
       chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c1; RChain c2]))
-        (RTree addr (siblings ++ [RChain cm]))
+        (RTree addr (L ++ [RChain c1] ++ M ++ [RChain c2] ++ R))
+        (RTree addr (L ++ M ++ [RChain cm] ++ R))
 
   (** R13: node-level merge.  A single token end-to-end
       in both chains (no token swap on either side),
@@ -641,7 +641,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       merge: useful when two chains carry the same
       asset without any conversion.
       [eth_arbitrage.ml:136] *)
-  | RS_merge_node : forall c1 c2 cm addr siblings,
+  | RS_merge_node : forall c1 c2 cm addr L M R,
       ch_origin c1 = ch_origin c2 ->
       ch_destination c1 = ch_destination c2 ->
       ch_token_in c1 = ch_token_out c1 ->
@@ -652,8 +652,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       ch_label cm = Merging ->
       chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c1; RChain c2]))
-        (RTree addr (siblings ++ [RChain cm]))
+        (RTree addr (L ++ [RChain c1] ++ M ++ [RChain c2] ++ R))
+        (RTree addr (L ++ M ++ [RChain cm] ++ R))
 
   (* ---- Annotation (R14, R15) ----
      Both rules see the transaction sender [from].
@@ -672,7 +672,7 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       either outside the cycle or equal to its source.
       This is the EOA-initiated case, where an external
       account captured the round-trip value. *)
-  | RS_annotate_arb : forall c c' addr siblings (from : address),
+  | RS_annotate_arb : forall c c' addr L R (from : address),
       ch_origin c = ch_destination c ->
       token_equiv (ch_token_in c) (ch_token_out c) = true ->
       ch_origin c' = ch_origin c ->
@@ -686,15 +686,15 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       chain_transfers c' = chain_transfers c ->
       wrap_unwrap c = false ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c]))
-        (RTree addr (siblings ++ [RChain c']))
+        (RTree addr (L ++ [RChain c] ++ R))
+        (RTree addr (L ++ [RChain c'] ++ R))
 
   (** R15: Cycle label.  s(C) = d(C) and [from] sits
       inside the cycle.  We do not claim arbitrage
       here: a contract took the round trip, but the
       value capture is internal to the cycle and not
       extracted by an external orchestrator. *)
-  | RS_annotate_cyc : forall c c' addr siblings (from : address),
+  | RS_annotate_cyc : forall c c' addr L R (from : address),
       ch_origin c = ch_destination c ->
       ch_origin c' = ch_origin c ->
       ch_destination c' = ch_destination c ->
@@ -705,8 +705,8 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
       address_in_chain from c = true ->
       chain_transfers c' = chain_transfers c ->
       rewrite_step
-        (RTree addr (siblings ++ [RChain c]))
-        (RTree addr (siblings ++ [RChain c'])).
+        (RTree addr (L ++ [RChain c] ++ R))
+        (RTree addr (L ++ [RChain c'] ++ R)).
 
 Inductive rewrite_star : reduced_cft -> reduced_cft -> Prop :=
   | RS_refl : forall t, rewrite_star t t
@@ -945,53 +945,30 @@ Proof.
     + left. exact Hin.
     + right. simpl. rewrite app_nil_r. exact Hin.
   - (* RS_merge_endpoints (R7) *)
-    rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H7 in Hin. exact Hin.
+    repeat (rewrite !flat_map_app_dist in *; simpl in *).
+    rewrite H7 in Hin.
+    rewrite !in_app_iff in *.
+    tauto.
   - (* RS_merge_add (R8) *)
-    rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H6 in Hin. exact Hin.
+    repeat (rewrite !flat_map_app_dist in *; simpl in *).
+    rewrite H6 in Hin.
+    rewrite !in_app_iff in *. tauto.
   - (* RS_merge_closed_R9 *)
-    rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H6 in Hin. exact Hin.
+    repeat (rewrite !flat_map_app_dist in *; simpl in *).
+    rewrite H6 in Hin.
+    rewrite !in_app_iff in *. tauto.
   - (* RS_merge_node (R13) *)
-    rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H7 in Hin. exact Hin.
+    repeat (rewrite !flat_map_app_dist in *; simpl in *).
+    rewrite H7 in Hin.
+    rewrite !in_app_iff in *. tauto.
   - (* RS_annotate_arb (R14) *)
     rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H8 in Hin. exact Hin.
+    simpl in *.
+    rewrite H8 in Hin. exact Hin.
   - (* RS_annotate_cyc (R15) *)
     rewrite !flat_map_app_dist in *.
-    simpl in *. rewrite !app_nil_r in *.
-    apply in_app_iff in Hin.
-    apply in_app_iff.
-    destruct Hin as [Hin | Hin].
-    + left. exact Hin.
-    + right. rewrite H7 in Hin. exact Hin.
+    simpl in *.
+    rewrite H7 in Hin. exact Hin.
 Qed.
 
 Lemma preservation :
@@ -1323,42 +1300,54 @@ Proof.
   - (* RS_merge_endpoints (R7) *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
-    inversion Hrest as [|? ? Hc2' _]; subst.
+    rewrite flat_map_app in Hrest. simpl in Hrest.
+    apply Forall_app in Hrest as [HM Htail].
+    inversion Htail as [|? ? Hc2' Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    split; [exact HM |].
+    constructor; [|exact Hr].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
   - (* RS_merge_add (R8) *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
-    inversion Hrest as [|? ? Hc2' _]; subst.
+    rewrite flat_map_app in Hrest. simpl in Hrest.
+    apply Forall_app in Hrest as [HM Htail].
+    inversion Htail as [|? ? Hc2' Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    split; [exact HM |].
+    constructor; [|exact Hr].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H6].
   - (* RS_merge_closed_R9 *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
-    inversion Hrest as [|? ? Hc2' _]; subst.
+    rewrite flat_map_app in Hrest. simpl in Hrest.
+    apply Forall_app in Hrest as [HM Htail].
+    inversion Htail as [|? ? Hc2' Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    split; [exact HM |].
+    constructor; [|exact Hr].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H6].
   - (* RS_merge_node (R13) *)
     destruct Hwalks as [Hsibs Hcs].
     inversion Hcs as [|? ? Hc1' Hrest]; subst.
-    inversion Hrest as [|? ? Hc2' _]; subst.
+    rewrite flat_map_app in Hrest. simpl in Hrest.
+    apply Forall_app in Hrest as [HM Htail].
+    inversion Htail as [|? ? Hc2' Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    split; [exact HM |].
+    constructor; [|exact Hr].
     eapply chain_walks_app; [exact Hc1' | exact Hc2' | exact H7].
   - (* RS_annotate_arb (R14) *)
-    destruct Hwalks as [Hsibs Hc].
-    inversion Hc as [|? ? Hcw _]; subst.
+    destruct Hwalks as [Hsibs Hctail].
+    inversion Hctail as [|? ? Hcw Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    constructor; [|exact Hr].
     eapply chain_walks_eq_transfers; [exact Hcw | exact H8].
   - (* RS_annotate_cyc (R15) *)
-    destruct Hwalks as [Hsibs Hc].
-    inversion Hc as [|? ? Hcw _]; subst.
+    destruct Hwalks as [Hsibs Hctail].
+    inversion Hctail as [|? ? Hcw Hr]; subst.
     split; [exact Hsibs |].
-    constructor; [|constructor].
+    constructor; [|exact Hr].
     eapply chain_walks_eq_transfers; [exact Hcw | exact H7].
 Qed.
 
@@ -2124,7 +2113,13 @@ Fixpoint annotate_all_fn
          && (if address_eq_dec (ch_origin c) (ch_destination c)
              then true else false)
          && token_equiv (ch_token_in c) (ch_token_out c)
-      then RChain (set_chain_label c (annotate_label from_ c))
+      then
+        match annotate_label from_ c with
+        | Arbitrage =>
+            if wrap_unwrap c then RChain c
+            else RChain (set_chain_label c Arbitrage)
+        | lbl => RChain (set_chain_label c lbl)
+        end
       else RChain c
   | RTree addr children =>
       RTree addr (map (annotate_all_fn from_) children)
@@ -2473,8 +2468,10 @@ Proof.
   intros from_.
   fix IH 1. destruct t as [tr | c | addr children].
   - simpl. reflexivity.
-  - simpl. destruct (_ && _ && _);
-      destruct c; simpl; reflexivity.
+  - simpl. destruct (_ && _ && _); [|reflexivity].
+    destruct (annotate_label from_ c) eqn:Hlab;
+      try reflexivity.
+    destruct (wrap_unwrap c); reflexivity.
   - simpl. rewrite length_map. f_equal.
     assert (Hfold : forall init,
       fold_left (fun a c => a + count_children c)
@@ -2499,11 +2496,23 @@ Proof.
   intros from_.
   fix IH 1. destruct t as [tr | c | addr children].
   - simpl. lia.
-  - simpl. destruct (_ && _ && _) eqn:Econd.
-    + destruct c as [t|o d m ti to_ ft lbl lc rc];
-        simpl; [lia|].
-      rewrite annotate_label_is_labeled. simpl. lia.
-    + destruct c; simpl; lia.
+  - simpl. destruct (_ && _ && _) eqn:Econd; [|simpl; lia].
+    destruct (annotate_label from_ c) eqn:Hlab; simpl.
+    + destruct (is_labeled (ch_label (set_chain_label c Chaining)));
+        destruct (is_labeled (ch_label c)); lia.
+    + destruct (is_labeled (ch_label (set_chain_label c Merging)));
+        destruct (is_labeled (ch_label c)); lia.
+    + destruct (is_labeled (ch_label (set_chain_label c Cycle)));
+        destruct (is_labeled (ch_label c)); lia.
+    + destruct (wrap_unwrap c).
+      * simpl. destruct (is_labeled (ch_label c)); lia.
+      * simpl.
+        destruct (is_labeled (ch_label (set_chain_label c Arbitrage)));
+          destruct (is_labeled (ch_label c)); lia.
+    + destruct (is_labeled (ch_label (set_chain_label c TokenBurn)));
+        destruct (is_labeled (ch_label c)); lia.
+    + destruct (is_labeled (ch_label (set_chain_label c TokenMint)));
+        destruct (is_labeled (ch_label c)); lia.
   - simpl.
     assert (Hfold : forall init,
       fold_left (fun a c => a + count_unlabeled c)
@@ -2965,9 +2974,11 @@ Proof.
   intros from_.
   fix IH 1. destruct t as [tr | c | addr children].
   - reflexivity.
-  - simpl. destruct (_ && _ && _).
-    + simpl. apply set_chain_label_chain_transfers.
-    + reflexivity.
+  - simpl. destruct (_ && _ && _); [|reflexivity].
+    destruct (annotate_label from_ c) eqn:Hlab; simpl;
+      try apply set_chain_label_chain_transfers.
+    destruct (wrap_unwrap c); simpl;
+      [reflexivity | apply set_chain_label_chain_transfers].
   - simpl.
     induction children as [| h rest IHl].
     + reflexivity.
@@ -3860,8 +3871,375 @@ Proof.
 Qed.
 
 (* ============================================================
-   Section 14: Decidable equivalence (Theorem 5)
+   Section 13d: Phase-3 bridge from [step_fn] to [rewrite_star]
    ============================================================ *)
+
+(** A reduced CFT is flat when its top-level [RTree] has only
+    [RLeaf] or [RChain] children. *)
+Definition flat_child (c : reduced_cft) : Prop :=
+  match c with
+  | RLeaf _ => True
+  | RChain _ => True
+  | RTree _ _ => False
+  end.
+
+Definition flat_rcft (T : reduced_cft) : Prop :=
+  match T with
+  | RLeaf _ => True
+  | RChain _ => True
+  | RTree _ children => Forall flat_child children
+  end.
+
+(** Transitivity of [rewrite_star]. *)
+Lemma rewrite_star_trans :
+  forall t1 t2 t3,
+    rewrite_star t1 t2 ->
+    rewrite_star t2 t3 ->
+    rewrite_star t1 t3.
+Proof.
+  intros t1 t2 t3 H12 H23.
+  induction H12 as [t | t1 t2 t3' Hstep Hstar IH].
+  - exact H23.
+  - eapply RS_trans; [exact Hstep | apply IH; exact H23].
+Qed.
+
+Lemma rewrite_star_one :
+  forall t1 t2, rewrite_step t1 t2 -> rewrite_star t1 t2.
+Proof.
+  intros t1 t2 Hstep.
+  eapply RS_trans; [exact Hstep | apply RS_refl].
+Qed.
+
+(** [annotate_label] returns either [Arbitrage] or
+    [Cycle]; the other [construction_label] tags are
+    not reachable from this function. *)
+Lemma annotate_label_arb_or_cyc :
+  forall from_ c,
+    annotate_label from_ c = Arbitrage \/
+    annotate_label from_ c = Cycle.
+Proof.
+  intros from_ c. unfold annotate_label.
+  destruct (negb (address_in_chain from_ c)); [left; reflexivity|].
+  destruct (address_eq_dec (ch_origin c) from_);
+    [left; reflexivity | right; reflexivity].
+Qed.
+
+(** [annotate_label = Arbitrage] precisely captures
+    the R14 premise on [from]. *)
+Lemma annotate_label_arb_implies :
+  forall from_ c,
+    annotate_label from_ c = Arbitrage ->
+    address_in_chain from_ c = false \/ ch_origin c = from_.
+Proof.
+  intros from_ c Harb. unfold annotate_label in Harb.
+  destruct (negb (address_in_chain from_ c)) eqn:Hnotin.
+  - left. apply negb_true_iff in Hnotin. exact Hnotin.
+  - destruct (address_eq_dec (ch_origin c) from_) as [Heq|];
+      [right; exact Heq | discriminate].
+Qed.
+
+(** [annotate_label = Cycle] precisely captures the
+    R15 premise on [from]. *)
+Lemma annotate_label_cyc_implies :
+  forall from_ c,
+    annotate_label from_ c = Cycle ->
+    address_in_chain from_ c = true.
+Proof.
+  intros from_ c Hcyc. unfold annotate_label in Hcyc.
+  destruct (negb (address_in_chain from_ c)) eqn:Hnotin;
+    [discriminate|].
+  apply negb_false_iff. exact Hnotin.
+Qed.
+
+(** [annotate_all_fn] preserves flatness. *)
+Lemma annotate_all_fn_preserves_flat :
+  forall from_ T,
+    flat_rcft T -> flat_rcft (annotate_all_fn from_ T).
+Proof.
+  intros from_ T Hflat.
+  destruct T as [tr | c | addr children]; simpl.
+  - exact I.
+  - destruct (_ && _ && _); [|exact I].
+    destruct (annotate_label from_ c); try exact I.
+    destruct (wrap_unwrap c); exact I.
+  - simpl in Hflat.
+    apply Forall_forall.
+    intros c Hin.
+    apply in_map_iff in Hin as [c0 [Heq Hin0]]; subst.
+    rewrite Forall_forall in Hflat.
+    specialize (Hflat c0 Hin0).
+    destruct c0 as [tr0 | ch0 | a0 ch0]; simpl in *;
+      [exact I | | contradiction].
+    destruct (_ && _ && _); [|exact I].
+    destruct (annotate_label from_ ch0); try exact I.
+    destruct (wrap_unwrap ch0); exact I.
+Qed.
+
+(** Annotating a single chain in arbitrary [L ++ [.] ++ R]
+    position is realized by zero or one declarative step. *)
+Lemma annotate_chain_in_context :
+  forall from_ addr L c R,
+    rewrite_star
+      (RTree addr (L ++ [RChain c] ++ R))
+      (RTree addr
+         (L ++ [annotate_all_fn from_ (RChain c)] ++ R)).
+Proof.
+  intros from_ addr L c R.
+  simpl annotate_all_fn.
+  destruct (negb (is_labeled (ch_label c))
+            && (if address_eq_dec (ch_origin c) (ch_destination c)
+                then true else false)
+            && token_equiv (ch_token_in c) (ch_token_out c)) eqn:Hcond;
+    [| apply RS_refl ].
+  apply andb_prop in Hcond as [Hcond12 Htok].
+  apply andb_prop in Hcond12 as [Hunl Hclo_eq].
+  apply negb_true_iff in Hunl.
+  destruct (address_eq_dec (ch_origin c) (ch_destination c))
+    as [Hclo|]; [|discriminate].
+  pose proof (annotate_label_arb_or_cyc from_ c) as [Harb|Hcyc].
+  - rewrite Harb.
+    destruct (wrap_unwrap c) eqn:Hwrap; [apply RS_refl|].
+    destruct c as [t | o d m ti to_ ft lbl' lc rc].
+    + simpl. apply RS_refl.
+    + apply rewrite_star_one.
+      apply (RS_annotate_arb (CT_node o d m ti to_ ft lbl' lc rc)
+        (CT_node o d m ti to_ ft Arbitrage lc rc) addr L R from_);
+        try reflexivity.
+      * exact Hclo.
+      * exact Htok.
+      * exact Hunl.
+      * apply annotate_label_arb_implies. exact Harb.
+      * exact Hwrap.
+  - rewrite Hcyc.
+    destruct c as [t | o d m ti to_ ft lbl' lc rc].
+    + simpl. apply RS_refl.
+    + apply rewrite_star_one.
+      apply (RS_annotate_cyc (CT_node o d m ti to_ ft lbl' lc rc)
+        (CT_node o d m ti to_ ft Cycle lc rc) addr L R from_);
+        try reflexivity.
+      * exact Hclo.
+      * exact Hunl.
+      * apply annotate_label_cyc_implies. exact Hcyc.
+Qed.
+
+(** Annotating a single [flat_child] (RLeaf or RChain)
+    in arbitrary position is realized by zero or one
+    declarative step. *)
+Lemma annotate_one_in_context :
+  forall from_ addr L c R,
+    flat_child c ->
+    rewrite_star
+      (RTree addr (L ++ [c] ++ R))
+      (RTree addr (L ++ [annotate_all_fn from_ c] ++ R)).
+Proof.
+  intros from_ addr L c R Hflat.
+  destruct c as [tr | ch | a children]; simpl in Hflat.
+  - simpl. apply RS_refl.
+  - apply annotate_chain_in_context.
+  - contradiction.
+Qed.
+
+(** Cascade: walk through the children list left-to-right,
+    annotating each child in turn.  The already-processed
+    children act as the left context [L]; the not-yet-
+    processed children act as the right context [R]. *)
+Lemma annotate_cascade :
+  forall from_ addr done todo,
+    Forall flat_child todo ->
+    rewrite_star
+      (RTree addr (done ++ todo))
+      (RTree addr (done ++ map (annotate_all_fn from_) todo)).
+Proof.
+  intros from_ addr done todo.
+  revert done.
+  induction todo as [|h rest IH]; intros done Hflat.
+  - simpl. rewrite app_nil_r. apply RS_refl.
+  - inversion Hflat as [|? ? Hh Hrest]; subst.
+    simpl.
+    eapply rewrite_star_trans.
+    + change (h :: rest) with ([h] ++ rest).
+      apply (annotate_one_in_context from_ addr done h rest Hh).
+    + specialize (IH (done ++ [annotate_all_fn from_ h]) Hrest).
+      rewrite <- !app_assoc in IH. simpl in IH.
+      exact IH.
+Qed.
+
+(** [annotate_all_fn] on an [RTree] with flat children
+    is realized by a sequence of [RS_annotate_arb] /
+    [RS_annotate_cyc] applications.  The [RTree] shape
+    holds by construction: [Build-AST] produces an
+    [RTree] root (the transaction call frame), so the
+    top-level input to Phase 3 is always an [RTree]. *)
+Lemma annotate_all_fn_to_rewrite_star :
+  forall from_ addr children,
+    Forall flat_child children ->
+    rewrite_star
+      (RTree addr children)
+      (annotate_all_fn from_ (RTree addr children)).
+Proof.
+  intros from_ addr children Hflat.
+  simpl.
+  change children with ([] ++ children) at 1.
+  apply (annotate_cascade from_ addr [] children Hflat).
+Qed.
+
+(** [merge_match c1 c2 cm] captures the precondition
+    that one of the declarative merge rules
+    (R7/R8/R9/R13) applies to the chain pair, with
+    the merged chain [cm] carrying the [Merging]
+    label and the joined transfer list.  The kernel's
+    [chains_mergeable] alone does not entail this
+    structural predicate; [merge_match] is the precise
+    invariant the kernel must maintain to align with
+    the declarative semantics. *)
+Definition merge_match
+    (c1 c2 cm : chain_tree) : Prop :=
+  (* Endpoints agree and the merged transfer list concatenates *)
+  ch_origin c1 = ch_origin c2 /\
+  ch_destination c1 = ch_destination c2 /\
+  ch_origin cm = ch_origin c1 /\
+  ch_destination cm = ch_destination c1 /\
+  ch_label cm = Merging /\
+  chain_transfers cm = chain_transfers c1 ++ chain_transfers c2 /\
+  (* One of R7/R8/R9/R13's token premise disjuncts holds *)
+  ( (* R7: parallel paths *)
+    (ch_origin c1 <> ch_destination c1 /\
+     ch_token_out c1 = ch_token_out c2 /\
+     ch_token_in c1 <> ch_token_in c2) \/
+    (* R8: closed, tokens match (or BalCont) *)
+    (ch_origin c1 = ch_destination c1 /\
+     ((ch_token_in c1 = ch_token_in c2 /\
+       ch_token_out c1 = ch_token_out c2) \/
+      bal_cont (ch_origin c1) c1 c2 = true)) \/
+    (* R9: closed at single vertex, tok_in match *)
+    (ch_origin c1 = ch_destination c1 /\
+     ch_origin c2 = ch_destination c2 /\
+     ch_token_in c1 = ch_token_in c2) \/
+    (* R13: same token end-to-end *)
+    (ch_token_in c1 = ch_token_out c1 /\
+     ch_token_in c1 = ch_token_in c2 /\
+     ch_token_out c1 = ch_token_out c2) ).
+
+(** A [merge_match]-justified merge step is realized
+    by exactly one of [RS_merge_endpoints],
+    [RS_merge_add], [RS_merge_closed_R9], or
+    [RS_merge_node].  The proof case-splits on
+    [merge_match]'s disjunction. *)
+Lemma merge_match_to_rewrite_step :
+  forall c1 c2 cm addr L M R,
+    merge_match c1 c2 cm ->
+    rewrite_step
+      (RTree addr (L ++ [RChain c1] ++ M ++ [RChain c2] ++ R))
+      (RTree addr (L ++ M ++ [RChain cm] ++ R)).
+Proof.
+  intros c1 c2 cm addr L M R Hm.
+  destruct Hm as [Ho [Hd [Hom [Hdm [Hlbl [Htfs Hcase]]]]]].
+  destruct Hcase as [HR7 | [HR8 | [HR9 | HR13]]].
+  - (* R7 *)
+    destruct HR7 as [Hne [Htout Htin]].
+    eapply RS_merge_endpoints; eauto.
+  - (* R8 *)
+    destruct HR8 as [Hcl Htok].
+    eapply RS_merge_add; eauto.
+  - (* R9 *)
+    destruct HR9 as [Hc1 [Hc2 Htin]].
+    eapply RS_merge_closed_R9; eauto.
+  - (* R13 *)
+    destruct HR13 as [Hsame [Htin Htout]].
+    eapply RS_merge_node; eauto.
+Qed.
+
+(** Subsequent [RS_annotate_arb] / [RS_annotate_cyc]
+    relabels the [Merging]-labeled merged chain to
+    [Arbitrage] or [Cycle], matching the kernel's
+    [merge_two_chains] output.  Premised on closure
+    (origin = destination), which is what makes
+    annotation applicable. *)
+Lemma annotate_after_merge :
+  forall from_ cm cm' addr L M R,
+    ch_label cm = Merging ->
+    ch_origin cm = ch_destination cm ->
+    token_equiv (ch_token_in cm) (ch_token_out cm) = true ->
+    chain_transfers cm' = chain_transfers cm ->
+    ch_origin cm' = ch_origin cm ->
+    ch_destination cm' = ch_destination cm ->
+    ch_token_in cm' = ch_token_in cm ->
+    ch_token_out cm' = ch_token_out cm ->
+    ( (ch_label cm' = Arbitrage /\
+       (address_in_chain from_ cm = false \/
+        ch_origin cm = from_) /\
+       wrap_unwrap cm = false) \/
+      (ch_label cm' = Cycle /\
+       address_in_chain from_ cm = true) ) ->
+    rewrite_step
+      (RTree addr (L ++ M ++ [RChain cm] ++ R))
+      (RTree addr (L ++ M ++ [RChain cm'] ++ R)).
+Proof.
+  intros from_ cm cm' addr L M R Hlbl Hcl Htok Htfs Hom Hdm Hti Hto Hcase.
+  assert (Hunl : is_labeled (ch_label cm) = false)
+    by (rewrite Hlbl; reflexivity).
+  rewrite (app_assoc L M).
+  rewrite (app_assoc L M ([RChain cm'] ++ R)).
+  destruct Hcase as [[Hlbl' [Hfr Hwr]] | [Hlbl' Hin]].
+  - apply (RS_annotate_arb cm cm' addr (L ++ M) R from_); assumption.
+  - apply (RS_annotate_cyc cm cm' addr (L ++ M) R from_); assumption.
+Qed.
+
+(** [step_fn_witness from_ children new_children] is
+    the structural invariant the kernel maintains for
+    [step_fn] to align with the declarative semantics.
+    A deployment satisfying it gets [rewrite_star]
+    coverage of every [step_fn] step via [annotate]
+    plus one merge step plus an optional relabel. *)
+Definition step_fn_witness
+    (from_ : address)
+    (children new_children : list reduced_cft) : Prop :=
+  Forall flat_child children /\
+  exists L c1 M c2 R cm cm',
+    children = L ++ [RChain c1] ++ M ++ [RChain c2] ++ R /\
+    new_children = L ++ M ++ [RChain cm'] ++ R /\
+    merge_match c1 c2 cm /\
+    ch_label cm = Merging /\
+    ch_origin cm = ch_destination cm /\
+    token_equiv (ch_token_in cm) (ch_token_out cm) = true /\
+    chain_transfers cm' = chain_transfers cm /\
+    ch_origin cm' = ch_origin cm /\
+    ch_destination cm' = ch_destination cm /\
+    ch_token_in cm' = ch_token_in cm /\
+    ch_token_out cm' = ch_token_out cm /\
+    ( (ch_label cm' = Arbitrage /\
+       (address_in_chain from_ cm = false \/
+        ch_origin cm = from_) /\
+       wrap_unwrap cm = false) \/
+      (ch_label cm' = Cycle /\
+       address_in_chain from_ cm = true) ).
+
+(** Phase-3 step is realized by [rewrite_star] when
+    the kernel's merge satisfies [step_fn_witness]:
+    one merge step ([merge_match_to_rewrite_step])
+    followed by one relabel ([annotate_after_merge]).
+    The annotate pass produced the [Merging]-shaped
+    chain that the merge rule consumes. *)
+Lemma step_fn_witness_to_rewrite_star :
+  forall from_ addr children new_children,
+    step_fn_witness from_ children new_children ->
+    rewrite_star
+      (RTree addr children)
+      (RTree addr new_children).
+Proof.
+  intros from_ addr children new_children Hw.
+  destruct Hw as [Hflat Hex].
+  destruct Hex as
+    [L [c1 [M [c2 [R [cm [cm'
+       [Hin [Hout [Hmm [Hlbl [Hcl [Htok
+       [Htfs [Hom [Hdm [Hti [Hto Hcase]]]]]]]]]]]]]]]]]].
+  subst children new_children.
+  eapply RS_trans.
+  - apply (merge_match_to_rewrite_step c1 c2 cm addr L M R Hmm).
+  - apply rewrite_star_one.
+    apply (annotate_after_merge from_ cm cm' addr L M R);
+      assumption.
+Qed.
 
 (** Two terms are joinable when they both reduce to a common term. *)
 Definition joinable (from_ : address) (T1 T2 : reduced_cft) : Prop :=
@@ -4503,18 +4881,33 @@ Proof.
       destruct Hsibs as [child [Hinch Hch]]. exists child. split.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
-    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
+    + destruct Hnew as [child [Hinch Hch]].
+      apply in_app_iff in Hinch.
+      destruct Hinch as [HinM | Hinch].
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. left. exact HinM.
+        - exact Hch. }
+      simpl in Hinch.
+      destruct Hinch as [Heq | HinR]; cycle 1.
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. right. exact HinR.
+        - exact Hch. }
+      subst child.
       apply chain_in_RChain_iff in Hch. subst c0.
       assert (Hc1inv : endpoints_match c1 /\
                        (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
-        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       assert (Hc2inv : endpoints_match c2 /\
                        (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
-        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
       unfold endpoints_match in Hep1, Hep2.
@@ -4543,18 +4936,33 @@ Proof.
       destruct Hsibs as [child [Hinch Hch]]. exists child. split.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
-    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
+    + destruct Hnew as [child [Hinch Hch]].
+      apply in_app_iff in Hinch.
+      destruct Hinch as [HinM | Hinch].
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. left. exact HinM.
+        - exact Hch. }
+      simpl in Hinch.
+      destruct Hinch as [Heq | HinR]; cycle 1.
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. right. exact HinR.
+        - exact Hch. }
+      subst child.
       apply chain_in_RChain_iff in Hch. subst c0.
       assert (Hc1inv : endpoints_match c1 /\
                        (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
-        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       assert (Hc2inv : endpoints_match c2 /\
                        (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
-        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
       unfold endpoints_match in Hep1, Hep2.
@@ -4583,18 +4991,33 @@ Proof.
       destruct Hsibs as [child [Hinch Hch]]. exists child. split.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
-    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
+    + destruct Hnew as [child [Hinch Hch]].
+      apply in_app_iff in Hinch.
+      destruct Hinch as [HinM | Hinch].
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. left. exact HinM.
+        - exact Hch. }
+      simpl in Hinch.
+      destruct Hinch as [Heq | HinR]; cycle 1.
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. right. exact HinR.
+        - exact Hch. }
+      subst child.
       apply chain_in_RChain_iff in Hch. subst c0.
       assert (Hc1inv : endpoints_match c1 /\
                        (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
-        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       assert (Hc2inv : endpoints_match c2 /\
                        (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
-        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
       unfold endpoints_match in Hep1, Hep2.
@@ -4627,18 +5050,33 @@ Proof.
       destruct Hsibs as [child [Hinch Hch]]. exists child. split.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
-    + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
+    + destruct Hnew as [child [Hinch Hch]].
+      apply in_app_iff in Hinch.
+      destruct Hinch as [HinM | Hinch].
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. left. exact HinM.
+        - exact Hch. }
+      simpl in Hinch.
+      destruct Hinch as [Heq | HinR]; cycle 1.
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. right. exact HinR.
+        - exact Hch. }
+      subst child.
       apply chain_in_RChain_iff in Hch. subst c0.
       assert (Hc1inv : endpoints_match c1 /\
                        (ch_label c1 = Arbitrage -> ch_origin c1 = ch_destination c1)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c1). split.
-        - apply in_app_iff. right. simpl. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       assert (Hc2inv : endpoints_match c2 /\
                        (ch_label c2 = Arbitrage -> ch_origin c2 = ch_destination c2)).
       { apply Hinv. apply chain_in_RTree_iff. exists (RChain c2). split.
-        - apply in_app_iff. right. simpl. right. left. reflexivity.
+        - apply in_app_iff. right. apply in_app_iff. right.
+          apply in_app_iff. right. apply in_app_iff. left.
+          simpl. left. reflexivity.
         - apply CIR_here. }
       destruct Hc1inv as [Hep1 _], Hc2inv as [Hep2 _].
       unfold endpoints_match in Hep1, Hep2.
@@ -4668,24 +5106,28 @@ Proof.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
     + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
-      apply chain_in_RChain_iff in Hch. subst c0.
-      assert (Hcinv : endpoints_match c /\
-                      (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
-      { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
-        - apply in_app_iff. right. simpl. left. reflexivity.
-        - apply CIR_here. }
-      destruct Hcinv as [Hep _].
-      unfold endpoints_match in Hep.
-      destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
-        [exfalso; exact Hep|].
-      destruct Hep as [Hco Hcd].
-      split.
-      * apply (endpoints_match_cons _ tc rest_c).
-        -- rewrite H8. reflexivity.
-        -- rewrite H1, Hco. reflexivity.
-        -- rewrite H2, Hcd. reflexivity.
-      * intros _. rewrite H1, H2. exact H.
+      destruct Hinch as [Heq | Hin_R].
+      * subst child.
+        apply chain_in_RChain_iff in Hch. subst c0.
+        assert (Hcinv : endpoints_match c /\
+                        (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
+        { apply Hinv. apply chain_in_RTree_iff. exists (RChain c). split.
+          - apply in_app_iff. right. simpl. left. reflexivity.
+          - apply CIR_here. }
+        destruct Hcinv as [Hep _].
+        unfold endpoints_match in Hep.
+        destruct (chain_transfers c) as [|tc rest_c] eqn:Hcteq;
+          [exfalso; exact Hep|].
+        destruct Hep as [Hco Hcd].
+        split.
+        -- apply (endpoints_match_cons _ tc rest_c).
+           ++ rewrite H8. reflexivity.
+           ++ rewrite H1, Hco. reflexivity.
+           ++ rewrite H2, Hcd. reflexivity.
+        -- intros _. rewrite H1, H2. exact H.
+      * apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        -- apply in_app_iff. right. simpl. right. exact Hin_R.
+        -- exact Hch.
 
   - (* R15: RS_annotate_cyc *)
     apply chain_in_RTree_app in Hin.
@@ -4695,7 +5137,11 @@ Proof.
       * apply in_app_iff. left. exact Hinch.
       * exact Hch.
     + destruct Hnew as [child [Hinch Hch]]. simpl in Hinch.
-      destruct Hinch as [Heq | []]. subst child.
+      destruct Hinch as [Heq | Hin_R]; cycle 1.
+      { apply Hinv. apply chain_in_RTree_iff. exists child. split.
+        - apply in_app_iff. right. simpl. right. exact Hin_R.
+        - exact Hch. }
+      subst child.
       apply chain_in_RChain_iff in Hch. subst c0.
       assert (Hcinv : endpoints_match c /\
                       (ch_label c = Arbitrage -> ch_origin c = ch_destination c)).
