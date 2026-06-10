@@ -146,9 +146,17 @@ def main():
     out.append("")
 
     # Read specific values
-    s01 = (SUMMARIES_DIR / "01_statistics/explore.txt").read_text()
-    s02 = (SUMMARIES_DIR / "01_statistics/accuracy.txt").read_text()
-    s27 = (SUMMARIES_DIR / "04_cat4/to_gap.txt").read_text()
+    def _read(p):
+        try:
+            return p.read_text()
+        except FileNotFoundError:
+            return ""
+
+    s01 = _read(SUMMARIES_DIR / "01_statistics/explore.txt")
+    s02 = _read(SUMMARIES_DIR / "01_statistics/accuracy.txt")
+    s27 = _read(SUMMARIES_DIR / "04_cat4/to_gap.txt")
+    if not s27:
+        out.append("  (Cat4 forensic skipped — needs archive node)")
 
     for line in s01.splitlines():
         if "Total Ours" in line:

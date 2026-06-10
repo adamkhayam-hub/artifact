@@ -49,7 +49,7 @@ def classify_cat4(tx_hash, summary_row):
     status = summary_row["status"]
 
     if status != "ok":
-        return "exec_error", f"debug_graph failed: {status}"
+        return "exec_error", f"inspect_tx failed: {status}"
 
     # Q1: Does Ours now detect it?
     if has_arb and verdict in ("arbitrage", "warning"):

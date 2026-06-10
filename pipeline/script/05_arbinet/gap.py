@@ -2,7 +2,7 @@
 28_3way_gap.py — Analyze 3-way gap transactions.
 
 Step 1: Extract tx hashes not in Ours from 3-way comparison.
-Step 2: Run debug_graph on each (via run_3way_gap.sh).
+Step 2: Run inspect_tx on each (via run_3way_gap.sh).
 Step 3: Check DOTs for yellow nodes (same as 27_cat4_to_gap.py).
 
 This script handles steps 1 and 3. Step 2 is out-of-band (RPC).
@@ -14,7 +14,7 @@ Reads:
     data/3way_gap/<tx_hash>/*.dot (after step 2)
 
 Writes:
-    data/3way_gap_hashes.json (step 1: tx list for debug_graph)
+    data/3way_gap_hashes.json (step 1: tx list for inspect_tx)
     summaries/05_arbinet/gap.txt (step 3: analysis)
 """
 import sys
@@ -152,7 +152,7 @@ def analyze(categories):
 
     if not GAP_DIR.exists():
         p(f"  ERROR: {GAP_DIR} not found.")
-        p("  Run debug_graph on the gap txs first (step 2).")
+        p("  Run inspect_tx on the gap txs first (step 2).")
         with open(OUT_TXT, "w") as f:
             f.write("\n".join(out) + "\n")
         return
@@ -220,7 +220,7 @@ def main():
             categories = json.load(f)
 
     if "--extract" in sys.argv:
-        print("\nStep 1 done. Now run debug_graph on these txs.")
+        print("\nStep 1 done. Now run inspect_tx on these txs.")
         print(f"Output to: {GAP_DIR}/")
         return
 

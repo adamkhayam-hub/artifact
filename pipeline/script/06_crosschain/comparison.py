@@ -111,8 +111,11 @@ def main():
         p(f"  {'Flagged (arb + warn)':<33s}" + "".join(flagged), out)
 
         # Detection rate
-        eth_rate = 100 * eth_flagged / eth_total if eth_total else 0
-        rates = [f"{eth_rate:>14.1f}%"]
+        # Ethereum: system_compact.csv ships positives only, so the
+        # rate over its own rows is 100% by construction and not
+        # comparable. The Arbitrum/BSC summaries cover every analyzed
+        # tx in their 1k-block window, so their rates are meaningful.
+        rates = [f"{'n/a (positives-only)':>15s}"]
         if arb_total:
             arb_rate = 100 * af / arb_total
             rates.append(f"{arb_rate:>14.1f}%")
@@ -121,6 +124,14 @@ def main():
             rates.append(f"{bsc_rate:>14.1f}%")
         p(f"  {'Detection rate':<33s}" + "".join(rates), out)
 
+        p("", out)
+        p("  Note: Ethereum's input CSV is the positives-only dataset;",
+          out)
+        p("  Arbitrum/BSC inputs cover every analyzed tx in a 1k-block",
+          out)
+        p("  window. Detection rate is therefore reported only for the",
+          out)
+        p("  latter two.", out)
         p("", out)
 
         # Confirmed
