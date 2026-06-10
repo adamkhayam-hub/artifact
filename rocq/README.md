@@ -11,8 +11,8 @@ approximately 30 seconds.
 
 ## Overview
 
-`Arbitrage.v` is a self-contained file (136 lemmas,
-7 theorems, 3 corollaries, 4,738 lines, 0 Admitted,
+`Arbitrage.v` is a self-contained file (137 lemmas,
+8 theorems, 4 corollaries, 4,859 lines, 0 Admitted,
 0 axioms) that mechanizes all five theorems from
 the paper. It requires only the Rocq standard
 library.
@@ -118,7 +118,7 @@ the abstract parameters to run.
 
 ## Parameters
 
-The development declares 9 `Parameter`s standing
+The development declares 10 `Parameter`s standing
 for predicates the OCaml decoder instantiates at
 run time. No `Axiom` is asserted: every theorem is
 parametric in these realizers, so soundness,
@@ -136,6 +136,7 @@ realizer choice.
 | `is_mint` | `transfer → bool` | Identifies mint transfers |
 | `is_singleton_router` | `address → bool` | Identifies singleton-router addresses |
 | `is_token_contract` | `address → token → bool` | Identifies leg-token contract addresses (guards `wrap_unwrap`) |
+| `net_positive` | `chain_tree → bool` | Deployer's cost model: realizer is gas-aware on Ethereum, L1-data-aware on Arbitrum, chain-specific on BSC. Case-split in `validate_deltas`. |
 
 Well-formedness of `token_equiv` (reflexivity,
 symmetry) is stated as a `Prop`

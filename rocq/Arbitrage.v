@@ -24,7 +24,6 @@
     Date: March 2026
 *)
 
-Set Warnings "-register-all".
 From Stdlib Require Import List.
 From Stdlib Require Import Arith.
 From Stdlib Require Import Lia.
@@ -141,38 +140,37 @@ Inductive chain_tree : Type :=
   | CT_transfer : transfer -> chain_tree
   | CT_node : address -> address -> list address ->
               token -> token -> transfer ->
-              (address -> token -> Z) ->
               construction_label ->
               chain_tree -> chain_tree -> chain_tree.
 
 Definition ch_label (c : chain_tree) : construction_label :=
   match c with
   | CT_transfer _ => Chaining
-  | CT_node _ _ _ _ _ _ _ l _ _ => l
+  | CT_node _ _ _ _ _ _ l _ _ => l
   end.
 
 Definition ch_origin (c : chain_tree) : address :=
   match c with
   | CT_transfer t => tr_source t
-  | CT_node o _ _ _ _ _ _ _ _ _ => o
+  | CT_node o _ _ _ _ _ _ _ _ => o
   end.
 
 Definition ch_destination (c : chain_tree) : address :=
   match c with
   | CT_transfer t => tr_dest t
-  | CT_node _ d _ _ _ _ _ _ _ _ => d
+  | CT_node _ d _ _ _ _ _ _ _ => d
   end.
 
 Definition ch_token_in (c : chain_tree) : token :=
   match c with
   | CT_transfer t => tr_token t
-  | CT_node _ _ _ ti _ _ _ _ _ _ => ti
+  | CT_node _ _ _ ti _ _ _ _ _ => ti
   end.
 
 Definition ch_token_out (c : chain_tree) : token :=
   match c with
   | CT_transfer t => tr_token t
-  | CT_node _ _ _ _ to_ _ _ _ _ _ => to_
+  | CT_node _ _ _ _ to_ _ _ _ _ => to_
   end.
 
 (** Signed balance contribution of a single transfer
@@ -200,7 +198,7 @@ Fixpoint ch_delta (c : chain_tree)
     (a : address) (tok : token) : Z :=
   match c with
   | CT_transfer t => transfer_delta t a tok
-  | CT_node _ _ _ _ _ _ _ _ l r =>
+  | CT_node _ _ _ _ _ _ _ l r =>
       (ch_delta l a tok + ch_delta r a tok)%Z
   end.
 
@@ -212,7 +210,7 @@ Fixpoint address_in_chain (a : address) (c : chain_tree) : bool :=
   match c with
   | CT_transfer t =>
       if address_eq_dec a (tr_source t) then true else false
-  | CT_node _ _ middlemen _ _ _ _ _ l r =>
+  | CT_node _ _ middlemen _ _ _ _ l r =>
       if existsb (fun m => if address_eq_dec a m then true else false) middlemen
       then true
       else address_in_chain a l || address_in_chain a r
@@ -223,6 +221,18 @@ Fixpoint address_in_chain (a : address) (c : chain_tree) : bool :=
     contract for the WETH token).  Trust-base predicate,
     same status as [is_burn] / [is_singleton_router]. *)
 Parameter is_token_contract : address -> token -> bool.
+
+(** Net-profitability predicate.  Abstracts the
+    deployer's cost model: on Ethereum,
+    [net_positive c = true] iff the cycle's gross
+    delta exceeds gas plus block-builder payment; on
+    Arbitrum, gas plus L1-data cost; on BSC, the
+    chain-specific cost basis.  Stated as a
+    [Parameter], not modeled in the kernel, so the
+    soundness theorems are parametric in the cost
+    model and transfer to any chain whose
+    realizer is supplied. *)
+Parameter net_positive : chain_tree -> bool.
 
 (** [wrap_unwrap c] holds when [c] is a pure native-
     wrapped roundtrip: a recursive chain whose
@@ -235,7 +245,7 @@ Parameter is_token_contract : address -> token -> bool.
 Fixpoint wrap_unwrap (c : chain_tree) : bool :=
   match c with
   | CT_transfer _ => false
-  | CT_node _ _ middlemen tin tout _ _ _ l r =>
+  | CT_node _ _ middlemen tin tout _ _ l r =>
       let middleman_is_leg_token :=
         existsb (fun m => is_token_contract m tin
                        || is_token_contract m tout) middlemen in
@@ -259,7 +269,7 @@ Inductive reduced_cft : Type :=
 Fixpoint chain_transfers (c : chain_tree) : list transfer :=
   match c with
   | CT_transfer t => [t]
-  | CT_node _ _ _ _ _ _ _ _ l r =>
+  | CT_node _ _ _ _ _ _ _ l r =>
       chain_transfers l ++ chain_transfers r
   end.
 
@@ -301,7 +311,7 @@ Lemma ch_delta_sum_leaves :
       (map (fun t => transfer_delta t a tok)
            (chain_transfers c)).
 Proof.
-  induction c as [t | o d m ti to_ ft delta lbl l IHl r IHr];
+  induction c as [t | o d m ti to_ ft lbl l IHl r IHr];
     simpl; intros a tok.
   - rewrite Z.add_0_r. reflexivity.
   - rewrite IHl, IHr.
@@ -389,7 +399,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t1]
                   (tr_token t1) (tr_token t2)
                   t1
-                  (fun _ _ => 0%Z)
                   Chaining
                   (CT_transfer t1) (CT_transfer t2) ->
       rewrite_step
@@ -406,7 +415,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t_burn]
                   (tr_token t_burn) (tr_token t)
                   t_burn
-                  (fun _ _ => 0%Z)
                   TokenBurn
                   (CT_transfer t_burn) (CT_transfer t) ->
       rewrite_step
@@ -423,7 +431,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t]
                   (tr_token t) (tr_token t_mint)
                   t
-                  (fun _ _ => 0%Z)
                   TokenMint
                   (CT_transfer t) (CT_transfer t_mint) ->
       rewrite_step
@@ -443,7 +450,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t1]
                   (tr_token t1) (tr_token t2)
                   t1
-                  (fun _ _ => 0%Z)
                   Cycle
                   (CT_transfer t1) (CT_transfer t2) ->
       rewrite_step
@@ -462,7 +468,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t1]
                   (tr_token t1) (tr_token t2)
                   t1
-                  (fun _ _ => 0%Z)
                   Chaining
                   (CT_transfer t1) (CT_transfer t2) ->
       rewrite_step
@@ -546,7 +551,6 @@ Inductive rewrite_step : reduced_cft -> reduced_cft -> Prop :=
                   [tr_dest t1]
                   (tr_token t1) (tr_token t2)
                   t1
-                  (fun _ _ => 0%Z)
                   Chaining
                   (CT_transfer t1) (CT_transfer t2) ->
       rewrite_step
@@ -1032,10 +1036,10 @@ Definition chain_walk (c : chain_tree) : Prop :=
 
 (** A two-leaf chain is a valid walk iff its leaves chain. *)
 Lemma chain_walk_two :
-  forall t1 t2 o d m ti to_ ft delta lbl,
+  forall t1 t2 o d m ti to_ ft lbl,
     tr_dest t1 = tr_source t2 ->
     chain_walk
-      (CT_node o d m ti to_ ft delta lbl
+      (CT_node o d m ti to_ ft lbl
                (CT_transfer t1) (CT_transfer t2)).
 Proof.
   intros. unfold chain_walk. simpl. split; auto.
@@ -1051,7 +1055,6 @@ Lemma chain_walk_swap :
                 [tr_dest t1]
                 (tr_token t1) (tr_token t2)
                 t1
-                (fun _ _ => 0%Z)
                 Chaining
                 (CT_transfer t1) (CT_transfer t2) ->
     chain_walk c.
@@ -1069,7 +1072,6 @@ Lemma chain_walk_burn :
                 [tr_dest t_burn]
                 (tr_token t_burn) (tr_token t)
                 t_burn
-                (fun _ _ => 0%Z)
                 TokenBurn
                 (CT_transfer t_burn) (CT_transfer t) ->
     chain_walk c.
@@ -1086,7 +1088,6 @@ Lemma chain_walk_mint :
                 [tr_dest t]
                 (tr_token t) (tr_token t_mint)
                 t
-                (fun _ _ => 0%Z)
                 TokenMint
                 (CT_transfer t) (CT_transfer t_mint) ->
     chain_walk c.
@@ -1104,7 +1105,6 @@ Lemma chain_walk_router :
                 [tr_dest t1]
                 (tr_token t1) (tr_token t2)
                 t1
-                (fun _ _ => 0%Z)
                 Chaining
                 (CT_transfer t1) (CT_transfer t2) ->
     chain_walk c.
@@ -1121,7 +1121,6 @@ Lemma chain_walk_same_token :
                 [tr_dest t1]
                 (tr_token t1) (tr_token t2)
                 t1
-                (fun _ _ => 0%Z)
                 Chaining
                 (CT_transfer t1) (CT_transfer t2) ->
     chain_walk c.
@@ -1392,15 +1391,15 @@ Definition set_chain_label
     (c : chain_tree) (l : construction_label) : chain_tree :=
   match c with
   | CT_transfer t => CT_transfer t
-  | CT_node o d m ti to_ ft delta _ lc rc =>
-      CT_node o d m ti to_ ft delta l lc rc
+  | CT_node o d m ti to_ ft _ lc rc =>
+      CT_node o d m ti to_ ft l lc rc
   end.
 
 (** First transfer of a chain (the leftmost leaf). *)
 Definition ch_first_transfer (c : chain_tree) : transfer :=
   match c with
   | CT_transfer t => t
-  | CT_node _ _ _ _ _ ft _ _ _ _ => ft
+  | CT_node _ _ _ _ _ ft _ _ _ => ft
   end.
 
 (** Decide annotation label: Arbitrage or Cycle. *)
@@ -1422,7 +1421,6 @@ Definition merge_two_chains
           []
           (ch_token_in c1) (ch_token_out c2)
           (ch_first_transfer c1)
-          (fun a tok => (ch_delta c1 a tok + ch_delta c2 a tok)%Z)
           l c1 c2.
 
 (** annotate_label always produces a labeled result. *)
@@ -1474,7 +1472,7 @@ Inductive fixpoint_step_rel (from_ : address) :
       from notin C or s(C) = from.
       Uses [token_equiv] (=_τ, Definition 4). *)
   | FS_annotate_arb : forall c addr siblings,
-      (match c with CT_node _ _ _ _ _ _ _ _ _ _ => True
+      (match c with CT_node _ _ _ _ _ _ _ _ _ => True
                   | CT_transfer _ => False end) ->
       ch_origin c = ch_destination c ->
       token_equiv (ch_token_in c) (ch_token_out c) = true ->
@@ -1487,7 +1485,7 @@ Inductive fixpoint_step_rel (from_ : address) :
   (** R14: Cycle annotation.
       from in C and s(C) != from. *)
   | FS_annotate_cycle : forall c addr siblings,
-      (match c with CT_node _ _ _ _ _ _ _ _ _ _ => True
+      (match c with CT_node _ _ _ _ _ _ _ _ _ => True
                   | CT_transfer _ => False end) ->
       ch_origin c = ch_destination c ->
       token_equiv (ch_token_in c) (ch_token_out c) = true ->
@@ -1618,14 +1616,14 @@ Proof.
   - (* FS_annotate_arb (R13) *)
     left.
     apply fold_left_add_last_lt.
-    destruct c as [t | o d m ti to_ ft delta lbl lc rc];
+    destruct c as [t | o d m ti to_ ft lbl lc rc];
       [ contradiction | ].
     simpl in H2 |- *.
     rewrite H2. simpl. lia.
   - (* FS_annotate_cycle (R14) *)
     left.
     apply fold_left_add_last_lt.
-    destruct c as [t | o d m ti to_ ft delta lbl lc rc];
+    destruct c as [t | o d m ti to_ ft lbl lc rc];
       [ contradiction | ].
     simpl in H2 |- *.
     rewrite H2. simpl. lia.
@@ -1660,7 +1658,8 @@ Qed.
     the gross delta at the origin is positive. *)
 Definition validated_arbitrage (c : chain_tree) : Prop :=
   ch_label c = Arbitrage /\
-  (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z.
+  (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z /\
+  net_positive c = true.
 
 (** Stronger soundness: VArbitrage implies both
     the cascade conditions AND the existence of
@@ -1760,7 +1759,8 @@ Fixpoint extract_arb_cycles (t : reduced_cft)
 Definition validate_deltas
     (cs : list chain_tree) : list chain_tree :=
   filter (fun c =>
-    Z.gtb (ch_delta c (ch_origin c) (ch_token_in c)) 0)
+    Z.gtb (ch_delta c (ch_origin c) (ch_token_in c)) 0
+    && net_positive c)
     cs.
 
 (** Cons-step reduction for [extract_arb_cycles] over an
@@ -1806,7 +1806,20 @@ Proof.
   intros cs c Hin.
   unfold validate_deltas in Hin.
   apply filter_In in Hin as [_ Hgt].
+  apply andb_true_iff in Hgt as [Hgt _].
   apply Z.gtb_lt in Hgt. apply Z.lt_gt. exact Hgt.
+Qed.
+
+(** Every chain that survives [validate_deltas] is
+    net-profitable under the deployer's cost model. *)
+Lemma validate_deltas_net_positive :
+  forall cs c, In c (validate_deltas cs) ->
+    net_positive c = true.
+Proof.
+  intros cs c Hin.
+  unfold validate_deltas in Hin.
+  apply filter_In in Hin as [_ Hgt].
+  apply andb_true_iff in Hgt as [_ Hnp]. exact Hnp.
 Qed.
 
 (** Validate-Deltas is conservative: filtering
@@ -1835,10 +1848,29 @@ Proof.
   intros t.
   apply Forall_forall.
   intros c Hin.
-  unfold validated_arbitrage. split.
+  unfold validated_arbitrage. repeat split.
   - apply (extract_arb_cycles_labeled t c).
     apply (validate_deltas_subset _ c Hin).
   - apply (validate_deltas_positive _ c Hin).
+  - apply (validate_deltas_net_positive _ c Hin).
+Qed.
+
+(** Attempted-arbitrage characterization: a closed,
+    structurally-Def-5 cycle whose [net_positive]
+    realizer returns false is, by construction, not
+    a validated arbitrage.  This is the formal
+    counterpart of the OCaml classifier emitting the
+    Warning verdict for cycles whose gross delta
+    exceeds gas + builder payment yields net <= 0. *)
+Corollary attempted_arbitrage_characterization :
+  forall c,
+    ch_label c = Arbitrage ->
+    (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z ->
+    net_positive c = false ->
+    ~ validated_arbitrage c.
+Proof.
+  intros c Hlbl Hpos Hnp [_ [_ Habs]].
+  rewrite Hnp in Habs. discriminate.
 Qed.
 
 (** compute_reasons: produces the reason list from
@@ -2221,7 +2253,7 @@ Lemma set_chain_label_label :
   forall c l,
     match c with
     | CT_transfer _ => ch_label (set_chain_label c l) = Chaining
-    | CT_node _ _ _ _ _ _ _ _ _ _ => ch_label (set_chain_label c l) = l
+    | CT_node _ _ _ _ _ _ _ _ _ => ch_label (set_chain_label c l) = l
     end.
 Proof. intros [|]; reflexivity. Qed.
 
@@ -2468,7 +2500,7 @@ Proof.
   fix IH 1. destruct t as [tr | c | addr children].
   - simpl. lia.
   - simpl. destruct (_ && _ && _) eqn:Econd.
-    + destruct c as [t|o d m ti to_ ft delta lbl lc rc];
+    + destruct c as [t|o d m ti to_ ft lbl lc rc];
         simpl; [lia|].
       rewrite annotate_label_is_labeled. simpl. lia.
     + destruct c; simpl; lia.
@@ -3199,7 +3231,7 @@ Qed.
 Fixpoint count_chain_transfers (c : chain_tree) : nat :=
   match c with
   | CT_transfer _ => 1
-  | CT_node _ _ _ _ _ _ _ _ l r =>
+  | CT_node _ _ _ _ _ _ _ l r =>
       count_chain_transfers l + count_chain_transfers r
   end.
 
@@ -3217,7 +3249,7 @@ Fixpoint count_transfers (t : reduced_cft) : nat :=
 Lemma chain_transfers_ge_1 :
   forall c, count_chain_transfers c >= 1.
 Proof.
-  induction c as [?|? ? ? ? ? ? ? ? ? lc IHl rc]; simpl; lia.
+  induction c as [?|? ? ? ? ? ? ? lc ? rc ?]; simpl; lia.
 Qed.
 
 (** Every RLeaf contributes 1 to count_unlabeled and
@@ -3231,7 +3263,7 @@ Proof.
   - (* RLeaf: both are 1 *)
     simpl. lia.
   - (* RChain: unlabeled is 0 or 1, transfers ≥ 1 *)
-    simpl. destruct c as [t0|o d m ti to_ ft delta lbl lc rc]; simpl.
+    simpl. destruct c as [t0|o d m ti to_ ft lbl lc rc]; simpl.
     + (* CT_transfer: both 1 *) lia.
     + (* CT_node: unlabeled ≤ 1, transfers ≥ 2 *)
       pose proof (chain_transfers_ge_1 lc) as Hlc.
@@ -3414,7 +3446,7 @@ Proof.
   fix IH 1.
   destruct t as [tr | c | addr [|h rest]].
   - simpl. lia.
-  - simpl. destruct c as [?|? ? ? ? ? ? ? ? cl cr]; simpl.
+  - simpl. destruct c as [?|? ? ? ? ? ? ? cl cr]; simpl.
     + lia.
     + intros _ _. pose proof (chain_transfers_ge_1 cl).
       pose proof (chain_transfers_ge_1 cr). lia.
@@ -3639,7 +3671,7 @@ Definition leaf_pair_chain
   CT_node (tr_source t1) (tr_dest t2)
           [tr_dest t1]
           (tr_token t1) (tr_token t2)
-          t1 (fun _ _ => 0%Z) l
+          t1 l
           (CT_transfer t1) (CT_transfer t2).
 
 (** Pool-cycle chain (R4): a cycle from
@@ -3650,7 +3682,7 @@ Definition pool_cycle_chain
   CT_node (tr_source t1) (tr_dest t2)
           [tr_dest t1]
           (tr_token t1) (tr_token t2)
-          t1 (fun _ _ => 0%Z) Cycle
+          t1 Cycle
           (CT_transfer t1) (CT_transfer t2).
 
 (** Deterministic leaf-pair combiner.  Priority
@@ -3932,12 +3964,16 @@ Proof.
   exact fixpoint_terminates.
 Qed.
 
-(** Theorem 3 (Soundness): an [Arbitrage] verdict implies the
-    structural conditions of Definition~5 and that every cycle
-    on the validated list is a [validated_arbitrage] (gross
-    delta > 0 at the cycle's origin).  The net-delta conjunct
-    (gross profit exceeds gas costs) follows by the
-    delta-decomposition argument in Section~C.3. *)
+(** Theorem 3 (Soundness): an [Arbitrage] verdict implies
+    the structural conditions of Definition~5 and that every
+    cycle on the validated list is a [validated_arbitrage]:
+    gross delta > 0 at the cycle's origin AND
+    [net_positive c = true] under the deployer's cost-model
+    realizer.  The latter is the formal counterpart of the
+    paper's [Delta_net > 0]: parametric, so the theorem
+    transfers to any chain whose [net_positive] is supplied
+    (gas + builder payment on Ethereum, plus L1-data cost on
+    Arbitrum, chain-specific basis on BSC). *)
 Theorem theorem_3_soundness :
   forall t has_left final_neg final_mixed,
     classify
@@ -3977,6 +4013,90 @@ Theorem theorem_5_decidable_equivalence :
     (joinable from_ T1 T2 <-> Nf1 = Nf2).
 Proof.
   exact decidable_equivalence.
+Qed.
+
+(** Decidable equality on [construction_label],
+    [transfer], [chain_tree], and [reduced_cft]:
+    every component type has decidable equality,
+    so [eq] is decidable by structural recursion.
+    This is what makes the Theorem~5 iff
+    *constructive*: a boolean witness of equality
+    or inequality on normal forms. *)
+Definition construction_label_eq_dec :
+  forall (l1 l2 : construction_label), {l1 = l2} + {l1 <> l2}.
+Proof. decide equality. Defined.
+
+Definition transfer_eq_dec :
+  forall (t1 t2 : transfer), {t1 = t2} + {t1 <> t2}.
+Proof.
+  intros [s1 d1 a1 tk1 sd1] [s2 d2 a2 tk2 sd2].
+  destruct (address_eq_dec s1 s2); [|right; congruence].
+  destruct (address_eq_dec d1 d2); [|right; congruence].
+  destruct (Nat.eq_dec a1 a2); [|right; congruence].
+  destruct (token_eq_dec tk1 tk2); [|right; congruence].
+  destruct (address_eq_dec sd1 sd2); [|right; congruence].
+  left; subst; reflexivity.
+Defined.
+
+Definition chain_tree_eq_dec :
+  forall (c1 c2 : chain_tree), {c1 = c2} + {c1 <> c2}.
+Proof.
+  fix IH 1.
+  intros [t1|o1 d1 m1 ti1 to1 ft1 lbl1 l1 r1]
+         [t2|o2 d2 m2 ti2 to2 ft2 lbl2 l2 r2];
+    try (right; discriminate).
+  - destruct (transfer_eq_dec t1 t2);
+      [left; congruence | right; congruence].
+  - destruct (address_eq_dec o1 o2); [|right; congruence].
+    destruct (address_eq_dec d1 d2); [|right; congruence].
+    destruct (list_eq_dec address_eq_dec m1 m2);
+      [|right; congruence].
+    destruct (token_eq_dec ti1 ti2); [|right; congruence].
+    destruct (token_eq_dec to1 to2); [|right; congruence].
+    destruct (transfer_eq_dec ft1 ft2); [|right; congruence].
+    destruct (construction_label_eq_dec lbl1 lbl2);
+      [|right; congruence].
+    destruct (IH l1 l2); [|right; congruence].
+    destruct (IH r1 r2); [|right; congruence].
+    left; subst; reflexivity.
+Defined.
+
+Definition reduced_cft_eq_dec :
+  forall (T1 T2 : reduced_cft), {T1 = T2} + {T1 <> T2}.
+Proof.
+  fix IH 1.
+  intros [t1|c1|a1 ch1] [t2|c2|a2 ch2];
+    try (right; discriminate).
+  - destruct (transfer_eq_dec t1 t2);
+      [left; congruence | right; congruence].
+  - destruct (chain_tree_eq_dec c1 c2);
+      [left; congruence | right; congruence].
+  - destruct (address_eq_dec a1 a2); [|right; congruence].
+    destruct (list_eq_dec IH ch1 ch2);
+      [left; congruence | right; congruence].
+Defined.
+
+(** Theorem 5 (constructive form): joinability is
+    decidable in the constructive sense.  Given the
+    normal forms of two reduced CFTs from the same
+    address, we produce a boolean witness.  Composes
+    the Prop-level iff [theorem_5_decidable_equivalence]
+    with the structural [reduced_cft_eq_dec]. *)
+Theorem theorem_5_decidable_equivalence_dec :
+  forall from_ (T1 T2 Nf1 Nf2 : reduced_cft),
+    nf from_ T1 Nf1 ->
+    nf from_ T2 Nf2 ->
+    {joinable from_ T1 T2} + {~ joinable from_ T1 T2}.
+Proof.
+  intros from_ T1 T2 Nf1 Nf2 Hnf1 Hnf2.
+  destruct (reduced_cft_eq_dec Nf1 Nf2) as [Heq | Hneq].
+  - left. apply (theorem_5_decidable_equivalence
+                   from_ T1 T2 Nf1 Nf2 Hnf1 Hnf2).
+    exact Heq.
+  - right. intros Hj. apply Hneq.
+    apply (theorem_5_decidable_equivalence
+             from_ T1 T2 Nf1 Nf2 Hnf1 Hnf2).
+    exact Hj.
 Qed.
 
 (* ============================================================
@@ -4144,7 +4264,7 @@ Qed.
 Lemma chain_transfers_nonempty :
   forall c, chain_transfers c <> [].
 Proof.
-  induction c as [t | a1 a2 ms ti to t f lbl l Ihl r Ihr].
+  induction c as [t | a1 a2 ms ti to t lbl l Ihl r Ihr].
   - simpl. discriminate.
   - simpl. intros Heq. apply app_eq_nil in Heq.
     destruct Heq as [E _]. contradiction.
@@ -4691,7 +4811,7 @@ Theorem classify_structural_soundness :
     chain_walks c /\
     (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z.
 Proof.
-  intros T0 Tf c Hwalks Hnc Hstar Hin [Hlbl Hdelta].
+  intros T0 Tf c Hwalks Hnc Hstar Hin [Hlbl [Hdelta Hnp]].
   destruct (refinement_of_transfer_graph_cycles _ _ _
               Hwalks Hnc Hstar Hin Hlbl)
     as [Htfs [Hclos Hep]].
