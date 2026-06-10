@@ -11,8 +11,8 @@ approximately 30 seconds.
 
 ## Overview
 
-`Arbitrage.v` is a self-contained file (153 lemmas,
-8 theorems, 4 corollaries, 5,426 lines, 0 Admitted,
+`Arbitrage.v` is a self-contained file (157 lemmas,
+8 theorems, 4 corollaries, 5,568 lines, 0 Admitted,
 0 axioms) that mechanizes all five theorems from
 the paper. It requires only the Rocq standard
 library.
@@ -118,7 +118,7 @@ the abstract parameters to run.
 
 ## Parameters
 
-The development declares 13 `Parameter`s standing
+The development declares 10 `Parameter`s standing
 for predicates the OCaml decoder instantiates at
 run time. No `Axiom` is asserted: every theorem is
 parametric in these realizers, so soundness,
@@ -137,9 +137,6 @@ realizer choice.
 | `is_singleton_router` | `address → bool` | Identifies singleton-router addresses |
 | `is_token_contract` | `address → token → bool` | Identifies leg-token contract addresses (guards `wrap_unwrap`) |
 | `net_positive` | `chain_tree → bool` | Deployer's cost model: realizer is gas-aware on Ethereum, L1-data-aware on Arbitrum, chain-specific on BSC. Case-split in `validate_deltas`. |
-| `merge_match_holds` | merge invariant | Kernel-emitted merged chains satisfy one of R7/R8/R9/R13's premises. Closes the Phase-3 bridge unconditionally. |
-| `merge_match_closure` | merge closure | The merged chain is closed (`origin = destination`). |
-| `merge_match_token` | merge `=_τ` | The merged chain's input and output tokens are `=_τ`-equivalent. |
 
 Well-formedness of `token_equiv` (reflexivity,
 symmetry) is stated as a `Prop`

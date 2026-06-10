@@ -12,9 +12,9 @@
     4. Confluence (unique normal form)
     5. Decidable equivalence (joinable iff same normal form)
 
-    Statistics: 165 lemmas/theorems/corollaries
-    (8 Theorems, 153 Lemmas, 4 Corollaries),
-    0 axioms, 0 Admitted, 13 Parameters.
+    Statistics: 169 lemmas/theorems/corollaries
+    (8 Theorems, 157 Lemmas, 4 Corollaries),
+    0 axioms, 0 Admitted, 10 Parameters.
     Rewriting rules: 15 constructors (R1--R15 from
     Table 1).  R16 (post-rewriting validation) is
     modeled by the [validated_arbitrage] predicate.
@@ -1650,11 +1650,11 @@ Definition validated_arbitrage (c : chain_tree) : Prop :=
   (ch_delta c (ch_origin c) (ch_token_in c) > 0)%Z /\
   net_positive c = true.
 
-(** Stronger soundness: VArbitrage implies both
-    the cascade conditions AND the existence of
-    at least one validated arbitrage cycle.
-    This bridges the gap between the syntactic
-    classify and the semantic Definition 4. *)
+(** [VArbitrage] implies both the cascade
+    conditions AND the existence of at least one
+    validated arbitrage cycle, connecting the
+    syntactic [classify] verdict to the semantic
+    Definition 4. *)
 Lemma soundness_full :
   forall reasons cycles,
     classify reasons = VArbitrage ->
@@ -1821,14 +1821,12 @@ Proof.
   apply filter_In in Hin as [Hin _]. exact Hin.
 Qed.
 
-(** Main theorem: the OCaml pipeline's
-    Extract-and-Recover composed with Validate-Deltas
-    produces a list of cycles each satisfying
-    [validated_arbitrage].  This closes the
-    "premises supplied externally" gap in
-    [soundness_end_to_end]: the [Forall
-    validated_arbitrage] hypothesis is now derivable
-    from a Rocq-modeled pipeline rather than assumed. *)
+(** The Extract-and-Recover composed with
+    Validate-Deltas produces a list of cycles each
+    satisfying [validated_arbitrage].  The [Forall
+    validated_arbitrage] hypothesis used in
+    [soundness_end_to_end] is derivable from the
+    Rocq-modeled pipeline. *)
 Lemma validate_deltas_sound :
   forall t,
     Forall validated_arbitrage
@@ -2015,16 +2013,12 @@ Proof.
 Qed.
 
 (** End-to-end soundness over a tree, with the
-    pipeline's filtered cycle list derived rather
-    than assumed.  When [classify] declares
-    VArbitrage and the tree contains at least one
-    arbitrage cycle that survives delta validation,
-    that cycle satisfies Definition 4
-    ([validated_arbitrage]).  This closes the
-    "premises supplied externally" gap in
-    [soundness_end_to_end]: the [Forall
-    validated_arbitrage] hypothesis is now derivable
-    from a Rocq-modeled pipeline rather than assumed. *)
+    pipeline's filtered cycle list derived from
+    [extract_arb_cycles] and [validate_deltas].
+    When [classify] declares VArbitrage and the
+    tree contains at least one arbitrage cycle
+    that survives delta validation, that cycle
+    satisfies Definition 4 ([validated_arbitrage]). *)
 Corollary soundness_end_to_end_tree :
   forall t has_left final_neg final_mixed,
     classify
@@ -2128,13 +2122,24 @@ Fixpoint annotate_all_fn
 (** Two labeled chains that share origin and
     destination are compatible for merging.
     Mirrorscft_trees_compatible_for_merge. *)
+(** [chains_mergeable c1 c2] holds when the kernel
+    may merge [c1] and [c2].  Enforces the structural
+    invariant required for the Phase-3 bridge: both
+    chains labeled, endpoints aligned, closure
+    (origin = destination), input-token match (R9
+    shape), and token closure on the merged chain. *)
 Definition chains_mergeable (c1 c2 : chain_tree) : bool :=
   is_labeled (ch_label c1)
   && is_labeled (ch_label c2)
   && (if address_eq_dec (ch_origin c1) (ch_origin c2)
       then true else false)
   && (if address_eq_dec (ch_destination c1) (ch_destination c2)
-      then true else false).
+      then true else false)
+  && (if address_eq_dec (ch_origin c1) (ch_destination c1)
+      then true else false)
+  && (if token_eq_dec (ch_token_in c1) (ch_token_in c2)
+      then true else false)
+  && token_equiv (ch_token_in c1) (ch_token_out c2).
 
 (** Structural merge for unlabeled Chaining chains.
     This handles the case where two adjacent chains
@@ -2148,7 +2153,11 @@ Definition chains_unlabeled_mergeable (c1 c2 : chain_tree) : bool :=
   negb (is_labeled (ch_label c1))
   && negb (is_labeled (ch_label c2))
   && (if label_eq_dec (ch_label c1) Chaining then true else false)
-  && (if label_eq_dec (ch_label c2) Chaining then true else false).
+  && (if label_eq_dec (ch_label c2) Chaining then true else false)
+  && (if address_eq_dec (ch_destination c1) (ch_origin c2)
+      then true else false)
+  && (if token_eq_dec (ch_token_out c1) (ch_token_in c2)
+      then true else false).
 
 (** Scan the sibling list for a chain compatible
     with c1 and merge them.
@@ -4241,24 +4250,80 @@ Proof.
       assumption.
 Qed.
 
-(** Deployment trust: kernel-emitted merged chains
-    satisfy the structural invariants of one of
-    R7/R8/R9/R13.  Same status as [net_positive]:
-    a deployer obligation discharged at extraction. *)
-Parameter merge_match_holds :
-  forall (from_ : address) (c1 c2 : chain_tree),
-    merge_match c1 c2 (merge_two_chains from_ c1 c2).
+(** [canonical_merge c1 c2] is the [Merging]-labeled
+    chain the declarative semantics produces.  Same
+    shape as [merge_two_chains] but with the label
+    fixed to [Merging] (annotation later relabels). *)
+Definition canonical_merge (c1 c2 : chain_tree) : chain_tree :=
+  CT_node (ch_origin c1) (ch_destination c2) []
+          (ch_token_in c1) (ch_token_out c2)
+          (ch_first_transfer c1) Merging c1 c2.
 
-Parameter merge_match_closure :
-  forall (from_ : address) (c1 c2 : chain_tree),
-    ch_origin (merge_two_chains from_ c1 c2)
-      = ch_destination (merge_two_chains from_ c1 c2).
+Lemma chains_mergeable_inv :
+  forall c1 c2,
+    chains_mergeable c1 c2 = true ->
+    is_labeled (ch_label c1) = true /\
+    is_labeled (ch_label c2) = true /\
+    ch_origin c1 = ch_origin c2 /\
+    ch_destination c1 = ch_destination c2 /\
+    ch_origin c1 = ch_destination c1 /\
+    ch_token_in c1 = ch_token_in c2 /\
+    token_equiv (ch_token_in c1) (ch_token_out c2) = true.
+Proof.
+  intros c1 c2 Hm. unfold chains_mergeable in Hm.
+  repeat (apply andb_true_iff in Hm as [Hm ?]).
+  repeat split; try assumption.
+  - destruct (address_eq_dec (ch_origin c1) (ch_origin c2));
+      [auto | discriminate].
+  - destruct (address_eq_dec (ch_destination c1) (ch_destination c2));
+      [auto | discriminate].
+  - destruct (address_eq_dec (ch_origin c1) (ch_destination c1));
+      [auto | discriminate].
+  - destruct (token_eq_dec (ch_token_in c1) (ch_token_in c2));
+      [auto | discriminate].
+Qed.
 
-Parameter merge_match_token :
-  forall (from_ : address) (c1 c2 : chain_tree),
+Lemma merge_match_holds :
+  forall c1 c2,
+    chains_mergeable c1 c2 = true ->
+    merge_match c1 c2 (canonical_merge c1 c2).
+Proof.
+  intros c1 c2 Hm.
+  apply chains_mergeable_inv in Hm.
+  destruct Hm as [Hl1 [Hl2 [Ho [Hd [Hcl [Hti Htok]]]]]].
+  unfold merge_match, canonical_merge.
+  repeat split; simpl; auto.
+  right. right. left.
+  split; [exact Hcl|]. split; [|exact Hti].
+  rewrite <- Hd, <- Ho. exact Hcl.
+Qed.
+
+Lemma merge_match_closure :
+  forall c1 c2,
+    chains_mergeable c1 c2 = true ->
+    ch_origin (canonical_merge c1 c2)
+      = ch_destination (canonical_merge c1 c2).
+Proof.
+  intros c1 c2 Hm.
+  apply chains_mergeable_inv in Hm.
+  destruct Hm as [_ [_ [_ [Hd [Hcl _]]]]].
+  unfold canonical_merge. simpl.
+  rewrite <- Hd. exact Hcl.
+Qed.
+
+Lemma merge_match_token :
+  forall c1 c2,
+    chains_mergeable c1 c2 = true ->
     token_equiv
-      (ch_token_in (merge_two_chains from_ c1 c2))
-      (ch_token_out (merge_two_chains from_ c1 c2)) = true.
+      (ch_token_in (canonical_merge c1 c2))
+      (ch_token_out (canonical_merge c1 c2)) = true.
+Proof.
+  intros c1 c2 Hm.
+  apply chains_mergeable_inv in Hm.
+  destruct Hm as [_ [_ [_ [_ [_ [_ Htok]]]]]].
+  unfold canonical_merge. simpl.
+  exact Htok.
+Qed.
 
 (** Factorization: a successful [scan_and_merge]
     locates a partner [c2] inside [after] and rewrites
@@ -4272,7 +4337,9 @@ Lemma scan_and_merge_factor :
       after = mid ++ RChain c2 :: after' /\
       new_children =
         prefix ++ (before ++ mid) ++
-        [RChain (merge_two_chains from_ c1 c2)] ++ after'.
+        [RChain (merge_two_chains from_ c1 c2)] ++ after' /\
+      (chains_mergeable c1 c2 = true \/
+       chains_unlabeled_mergeable c1 c2 = true).
 Proof.
   intros from_ c1 prefix before after.
   revert before.
@@ -4282,25 +4349,30 @@ Proof.
     destruct x as [t | c2 | a chs].
     + (* RLeaf: recurse *)
       specialize (IH (before ++ [RLeaf t]) nc Hsm).
-      destruct IH as [mid [c2 [after2 [Heq Hnc]]]].
-      exists (RLeaf t :: mid), c2, after2. split.
+      destruct IH as [mid [c2 [after2 [Heq [Hnc Hmm]]]]].
+      exists (RLeaf t :: mid), c2, after2.
+      split; [|split; [|exact Hmm]].
       * simpl. rewrite Heq. reflexivity.
       * rewrite Hnc, <- (app_assoc before [RLeaf t] mid). reflexivity.
     + (* RChain c2: merge fires or recurse *)
       destruct (chains_mergeable c1 c2
                 || chains_unlabeled_mergeable c1 c2) eqn:Hmm.
       * injection Hsm as <-.
-        exists [], c2, after'. split; [reflexivity|].
-        rewrite app_nil_r. reflexivity.
+        exists [], c2, after'.
+        split; [reflexivity|].
+        split; [rewrite app_nil_r; reflexivity|].
+        apply orb_true_iff in Hmm. exact Hmm.
       * specialize (IH (before ++ [RChain c2]) nc Hsm).
-        destruct IH as [mid [c2x [after2 [Heq Hnc]]]].
-        exists (RChain c2 :: mid), c2x, after2. split.
+        destruct IH as [mid [c2x [after2 [Heq [Hnc Hmm2]]]]].
+        exists (RChain c2 :: mid), c2x, after2.
+        split; [|split; [|exact Hmm2]].
         -- simpl. rewrite Heq. reflexivity.
         -- rewrite Hnc, <- (app_assoc before [RChain c2] mid). reflexivity.
     + (* RTree: recurse *)
       specialize (IH (before ++ [RTree a chs]) nc Hsm).
-      destruct IH as [mid [c2 [after2 [Heq Hnc]]]].
-      exists (RTree a chs :: mid), c2, after2. split.
+      destruct IH as [mid [c2 [after2 [Heq [Hnc Hmm]]]]].
+      exists (RTree a chs :: mid), c2, after2.
+      split; [|split; [|exact Hmm]].
       * simpl. rewrite Heq. reflexivity.
       * rewrite Hnc, <- (app_assoc before [RTree a chs] mid). reflexivity.
 Qed.
@@ -4317,7 +4389,9 @@ Lemma try_merge_children_factor :
       prefix ++ suffix =
         L ++ [RChain c1] ++ M ++ [RChain c2] ++ R /\
       new_children =
-        L ++ M ++ [RChain (merge_two_chains from_ c1 c2)] ++ R.
+        L ++ M ++ [RChain (merge_two_chains from_ c1 c2)] ++ R /\
+      (chains_mergeable c1 c2 = true \/
+       chains_unlabeled_mergeable c1 c2 = true).
 Proof.
   intros from_ prefix suffix.
   revert prefix.
@@ -4330,14 +4404,16 @@ Proof.
       unfold find_and_merge in Hfm.
       destruct child as [t | c1 | a chs]; try discriminate.
       apply scan_and_merge_factor in Hfm.
-      destruct Hfm as [mid [c2 [after' [Heq Hnc]]]].
-      exists prefix, c1, mid, c2, after'. split.
+      destruct Hfm as [mid [c2 [after' [Heq [Hnc Hmm]]]]].
+      exists prefix, c1, mid, c2, after'.
+      split; [|split; [|exact Hmm]].
       * simpl. rewrite Heq. reflexivity.
       * rewrite Hnc, app_nil_l. reflexivity.
     + specialize (IH (prefix ++ [child]) nc Htmc).
-      destruct IH as [L [c1 [M [c2 [R [Hin Hnc]]]]]].
-      exists L, c1, M, c2, R. split; [|exact Hnc].
-      rewrite <- Hin. rewrite <- app_assoc. reflexivity.
+      destruct IH as [L [c1 [M [c2 [R [Hin [Hnc Hmm]]]]]]].
+      exists L, c1, M, c2, R.
+      split; [|split; [exact Hnc | exact Hmm]].
+      rewrite <- Hin, <- app_assoc. reflexivity.
 Qed.
 
 (** Composition: [try_merge_children]'s output is
@@ -4347,19 +4423,79 @@ Qed.
     bridge. *)
 Lemma try_merge_children_to_rewrite_star :
   forall from_ addr prefix suffix new_children,
+    (forall c, In (RChain c) (prefix ++ suffix) ->
+               is_labeled (ch_label c) = true) ->
     try_merge_children from_ prefix suffix = Some new_children ->
     rewrite_star
       (RTree addr (prefix ++ suffix))
       (RTree addr new_children).
 Proof.
-  intros from_ addr prefix suffix new_children Htmc.
+  intros from_ addr prefix suffix new_children Hlab Htmc.
   apply try_merge_children_factor in Htmc.
-  destruct Htmc as [L [c1 [M [c2 [R [Hin Hnc]]]]]].
+  destruct Htmc as [L [c1 [M [c2 [R [Hin [Hnc Hmm]]]]]]].
+  assert (Hl1 : is_labeled (ch_label c1) = true).
+  { apply Hlab. rewrite Hin.
+    rewrite in_app_iff. right.
+    rewrite in_app_iff. left. simpl. left. reflexivity. }
+  assert (Hl2 : is_labeled (ch_label c2) = true).
+  { apply Hlab. rewrite Hin.
+    rewrite in_app_iff. right.
+    rewrite in_app_iff. right.
+    rewrite in_app_iff. right.
+    rewrite in_app_iff. left. simpl. left. reflexivity. }
   rewrite Hin, Hnc.
-  apply rewrite_star_one.
-  apply (merge_match_to_rewrite_step c1 c2
-           (merge_two_chains from_ c1 c2) addr L M R).
-  apply merge_match_holds.
+  destruct Hmm as [Hcm | Hunl].
+  - (* chains_mergeable case: two declarative steps. *)
+    pose proof (chains_mergeable_inv c1 c2 Hcm) as Hcminv.
+    destruct Hcminv as [_ [_ [Ho [Hd [Hcl [Hti _]]]]]].
+    eapply RS_trans.
+    + apply (merge_match_to_rewrite_step c1 c2
+               (canonical_merge c1 c2) addr L M R).
+      apply merge_match_holds, Hcm.
+    + apply rewrite_star_one.
+      apply (annotate_after_merge from_ (canonical_merge c1 c2)
+               (merge_two_chains from_ c1 c2) addr L M R).
+      * reflexivity.
+      * apply merge_match_closure, Hcm.
+      * apply merge_match_token, Hcm.
+      * unfold canonical_merge, merge_two_chains. reflexivity.
+      * unfold canonical_merge, merge_two_chains. reflexivity.
+      * unfold canonical_merge, merge_two_chains. reflexivity.
+      * unfold canonical_merge, merge_two_chains. reflexivity.
+      * unfold canonical_merge, merge_two_chains. reflexivity.
+      * (* Dispatch on Arbitrage vs Cycle from merge_two_chains. *)
+        assert (Hain :
+                  address_in_chain from_ (canonical_merge c1 c2)
+                  = address_in_chain from_ c1
+                    || address_in_chain from_ c2)
+          by reflexivity.
+        assert (Hwrap : wrap_unwrap (canonical_merge c1 c2) = false)
+          by reflexivity.
+        destruct (negb (address_in_chain from_ c1)
+                  && negb (address_in_chain from_ c2)) eqn:Eboth.
+        -- left.
+           unfold merge_two_chains. simpl.
+           rewrite Eboth.
+           split; [reflexivity|].
+           split; [|exact Hwrap].
+           apply andb_true_iff in Eboth as [Hn1 Hn2].
+           apply negb_true_iff in Hn1.
+           apply negb_true_iff in Hn2.
+           left. rewrite Hn1, Hn2. reflexivity.
+        -- right.
+           unfold merge_two_chains. simpl.
+           rewrite Eboth.
+           split; [reflexivity|].
+           apply andb_false_iff in Eboth as [Hb|Hb];
+             apply negb_false_iff in Hb; rewrite Hb;
+             [reflexivity | apply orb_true_r].
+  - (* chains_unlabeled_mergeable case: [Hl1] says [c1] is
+       labeled, but [Hunl] entails [c1] is unlabeled.
+       Contradiction. *)
+    exfalso. unfold chains_unlabeled_mergeable in Hunl.
+    repeat (apply andb_true_iff in Hunl as [Hunl ?]).
+    apply negb_true_iff in Hunl.
+    rewrite Hunl in Hl1. discriminate.
 Qed.
 
 (** Two terms are joinable when they both reduce to a common term. *)
@@ -5395,16 +5531,17 @@ Qed.
 (** Extraction to OCaml.  Uncomment the block below to
     extract the rewriting kernel ([step_fn],
     [try_combine_leaves]) and the verdict cascade
-    ([classify]) to [arbitrage_verified.ml].  The nine
-    declared [Parameter]s form the deployment trust
-    base: token equivalence, burn/mint detection,
-    singleton-router membership, and token-contract
-    membership.  They are supplied as realizers at
-    extraction time; the realizers shown below are
-    placeholders for unit-testing the extracted
-    kernel.  Every theorem in this file is parametric
-    in these realizers, so soundness, confluence, and
-    termination transfer to any realizer choice. *)
+    ([classify]) to [arbitrage_verified.ml].  The ten
+    declared [Parameter]s are: token equivalence,
+    burn/mint detection, singleton-router membership,
+    token-contract membership, and the cost model
+    (\texttt{net\_positive}).  They are supplied as
+    realizers at extraction time; the realizers shown
+    below are placeholders for unit-testing the
+    extracted kernel.  Every theorem in this file is
+    parametric in these realizers, so soundness,
+    confluence, and termination transfer to any
+    realizer choice. *)
 
 (*
 Require Extraction.
