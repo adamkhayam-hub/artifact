@@ -529,7 +529,7 @@ transaction:
 The full 220K-block trace dataset exceeds 500 GB, which
 is impractical for artifact hosting. The complete
 evaluation CSV (`system_arbis.csv`, 8.7 GB) contains
-verdicts for all 1M+ flagged transactions and is
+verdicts for all 790,593 flagged transactions and is
 sufficient to reproduce every paper statistic. The 1K
 trace samples enable hands-on verification of individual
 verdicts.
@@ -600,8 +600,8 @@ arbitrage cycles.
 
 | Color | Meaning | Rule |
 |-------|---------|------|
-| Yellow | Arbitrage cycle: closed, matching tokens, profitable | R13 |
-| Pink | Cycle: closed, but sender is intermediary | R14 |
+| Yellow | Arbitrage cycle: closed, matching tokens, profitable | R14 |
+| Pink | Cycle: closed, but sender is intermediary | R15 |
 | Green | Merged chains: parallel paths combined | R7/R8 |
 | Beige | Transfer chain: sequential transfers chained | R1/R6/R9 |
 | Orange | Token mint: deposit or wrap | R3 |
