@@ -34,15 +34,24 @@ detect-api_parts_amd64/
   detect-api.tar.gz.part-am                7571358
 ```
 
-Quick check:
+Quick check (portable, macOS and Linux):
 
 ```bash
 find blockdb_parts pipeline/data_parts detect-api_parts_arm64 \
-     detect-api_parts_amd64 -name '*.part-*' -printf '%s %p\n' | sort
+     detect-api_parts_amd64 -name '*.part-*' -exec wc -c {} \; | sort
 ```
 
-If any non-final part differs from 99,614,720 bytes, it is
-corrupted.
+Flag any corrupted parts in one go:
+
+```bash
+find blockdb_parts pipeline/data_parts detect-api_parts_arm64 \
+     detect-api_parts_amd64 -name '*.part-*' -exec wc -c {} \; |
+  awk '$1!=99614720 && $1!=81557049 && $1!=46059520 \
+       && $1!=17990566 && $1!=7571358 {print "BAD:",$0}'
+```
+
+If the second command prints nothing, every part has an expected
+size. If it prints anything, the listed file is corrupted.
 
 ## How to fix
 
