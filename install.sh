@@ -55,10 +55,13 @@ if ! opam switch list --short 2>/dev/null | grep -q '^rocq$'; then
 fi
 eval "$(opam env --switch=rocq --set-switch)"
 if ! opam list --installed 2>/dev/null | grep -q "^rocq-core "; then
-  opam install -y rocq-core
+  opam install -y rocq-core.9.2.0
+fi
+if ! opam list --installed 2>/dev/null | grep -q "^rocq-runtime "; then
+  opam install -y rocq-runtime.9.2.0
 fi
 if ! opam list --installed 2>/dev/null | grep -q "^rocq-stdlib "; then
-  opam install -y rocq-stdlib
+  opam install -y rocq-stdlib.9.1.0
 fi
 echo "Rocq OK ($(opam exec -- rocq --version 2>/dev/null | head -1 || echo 'installed'))."
 

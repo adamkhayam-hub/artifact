@@ -78,11 +78,11 @@ whose blocks are available in `blockdb/`. This means:
   transactions. The `blockdb/3way/` directory must
   contain the traces for this range.
 
-The forensic percentages (63.5% at inner addresses,
-8.5% baseline false positives) may differ slightly
-because the sample is drawn from fewer blocks. The
-methodology and the analysis logic are identical to
-the paper.
+The forensic percentages (63.5% no cycle in
+canonical form, 9.0% inner-address) may differ
+slightly because the sample is drawn from fewer
+blocks. The methodology and the analysis logic
+are identical to the paper.
 
 ### Online mode (`--online --config <path>`)
 
@@ -183,11 +183,11 @@ summary in `output/summaries/01_statistics/`.
 
 | Step | Script | What it computes |
 |------|--------|-----------------|
-| 1 | `explore.py` | Total flagged (1,016,649), confirmed (457,841), fixpoint coverage (98.7%) |
-| 2 | `accuracy.py` | Eigenphi overlap (83%), exclusive detections (64,340), tier breakdown |
-| 3 | `topology.py` | Cycle count (1,889,755), batching rates, cycle lengths |
-| 4 | `performance.py` | Algorithm latency (P50=0.04ms, P95=0.26ms) |
-| 5 | `attempted.py` | Attempted arbitrages (437,409, 43%), per-block ratio |
+| 1 | `explore.py` | Total flagged (790,593), confirmed (469,801), fixpoint coverage (98.7%) |
+| 2 | `accuracy.py` | Eigenphi overlap (83.5%), exclusive detections (60,199), tier breakdown |
+| 3 | `topology.py` | Cycle count (940,760), batching rates, cycle lengths |
+| 4 | `performance.py` | Algorithm latency (P50=0.07ms, P95=0.47ms) |
+| 5 | `attempted.py` | Attempted arbitrages (245,497, 31.1%), per-block ratio |
 | 6 | `bots.py` | Bot concentration (top-10 senders) |
 | 7 | `temporal.py` | Temporal distribution across blocks |
 | 8 | `gas.py` | Gas efficiency analysis |
@@ -234,11 +234,12 @@ These steps implement the manual validation methodology:
 
 4. **Eigenphi-only** (200 txs): transactions Eigenphi
    flags but our system does not classify. What are
-   we missing? Result: 63.5% contain cycles at inner
-   addresses (our fixpoint detects them but the
-   classification does not surface them), 28% are
-   cross-token routing (not arbitrages), 8.5% are
-   Eigenphi false positives.
+   we missing? Result: 63.5% have no cycle in
+   canonical form (Eigenphi false positives), 27.5%
+   are cross-token routing (not arbitrages), and
+   9.0% contain cycles at inner addresses (our
+   fixpoint detects them but the classification
+   does not surface them).
 
 In offline mode, step 10 automatically samples only
 from transactions whose blocks are in `blockdb/`.

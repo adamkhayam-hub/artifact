@@ -44,16 +44,18 @@ inductive (one constructor per rule, R1–R15):
 | `RS_mint_chain` | R3 | Chain a mint transfer with its successor |
 | `RS_pool_cycle` | R4 | Two opposite transfers forming a pool round-trip (σ-external) |
 | `RS_router_chain` | R5 | Same-token leaves through a singleton router |
-| `RS_chain_leaf` | R6 | Chain a leaf with an existing chain |
-| `RS_merge_parallel` | R7 | Merge two parallel chains at matching endpoints |
-| `RS_merge_closed_R8` | R8 | Merge two closed chains (token-match or `BalCont`) |
-| `RS_merge_closed_R9` | R9 | Merge two closed chains at the same self-loop vertex |
-| `RS_same_token_chain` | R10 | Chain two same-token leaves at node level (σ-external) |
-| `RS_chain_chain` | R11 | Chain two sequential chains |
-| `RS_merge_endpoint` | R12 | Merge chains sharing an endpoint vertex |
-| `RS_lift` | R13 | Promote a fully-reduced subtree |
+| `RS_leaf_chain` | R6 | Chain a leaf with an existing chain (same call frame) |
+| `RS_merge_endpoints` | R7 | Merge two chains sharing source and destination |
+| `RS_merge_add` | R8 | Merge two closed chains (token-match or `BalCont`) |
+| `RS_merge_closed_R9` | R9 | Merge two closed chains at the same vertex |
+| `RS_chain_seq` | R10 | Chain two sequential chains (token continuity or `BalCont`) |
+| `RS_same_token_chain` | R11 | Chain two same-token leaves at node level (σ-external) |
+| `RS_node_leaf_chain` | R12 | Chain a leaf with a chain across call frames |
+| `RS_merge_node` | R13 | Merge endpoint nodes (full-token-equality merge) |
 | `RS_annotate_arb` | R14 | Label closed chain as arbitrage (=\_τ token-in/out, ¬`WrapUnwrap`) |
 | `RS_annotate_cyc` | R15 | Label closed chain as non-arbitrage cycle |
+
+`RS_lift` is an auxiliary structural step (promotes a fully-reduced subtree) used by the engine; it is not a numbered rule.
 
 R16 (post-rewriting delta validation) is modeled by
 the `validated_arbitrage` predicate.

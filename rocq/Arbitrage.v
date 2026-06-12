@@ -34,6 +34,7 @@ From Stdlib Require Import Wellfounded.Inverse_Image.
 From Stdlib Require Import Relation_Operators.
 From Stdlib Require Import Wf_nat.
 Import ListNotations.
+Scheme All for list.
 
 (* ============================================================
    Section 1: Basic Types

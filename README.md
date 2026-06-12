@@ -49,6 +49,7 @@ cd artifact && ./install.sh
 cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=rocq -- rocq compile Arbitrage.v
 
 # 3. Reproduce the evaluation (5-30 min offline, hours online)
+source ../.venv/bin/activate
 cd ../pipeline && python3 script/run_all.py --offline --from 0
 ```
 
