@@ -41,9 +41,14 @@ only need to install the three underlying tools.
 Three commands to reproduce every claim in the paper:
 
 ```bash
+# 0. If you obtained the artifact as a ZIP, restore execute
+#    permissions (ZIP does not preserve Unix +x bits)
+cd artifact && chmod +x install.sh cleanup.sh \
+                       pipeline/run.sh pipeline/generate_csv.sh
+
 # 1. Install artifact dependencies (~5 min, one-time)
 #    Reassembles parts, loads detect-api, installs Python + Rocq
-cd artifact && ./install.sh
+./install.sh
 
 # 2. Verify the 5 theorems (< 1 min) — single line, no continuation
 cd rocq && OPAMROOT="$PWD/../.opam" opam exec --switch=rocq -- rocq compile Arbitrage.v

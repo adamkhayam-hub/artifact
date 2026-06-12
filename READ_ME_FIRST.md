@@ -61,5 +61,15 @@ folder and click the file name. Single-file downloads are
 not affected by the ZIP bug. Overwrite the bad copy with
 the freshly downloaded file and re-run `./install.sh`.
 
+## Script execute permissions
+
+ZIP extraction does not preserve Unix execute bits.  Before
+running any script, restore permissions:
+
+```bash
+chmod +x install.sh cleanup.sh \
+         pipeline/run.sh pipeline/generate_csv.sh
+```
+
 The rest of this artifact is documented in
 [`README.md`](README.md).
