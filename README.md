@@ -8,7 +8,8 @@ Structural Equivalence." It enables verification of every
 claim in the paper through four components:
 
 1. **Rocq formalization** — machine-checked proofs of all
-   five theorems
+   five theorems, with a long-form proof companion
+   (`proofs/proofs.pdf`)
 2. **Evaluation pipeline** — reproduces every number,
    figure, and table from the paper
 3. **Detection tool** — a Docker image for inspecting
@@ -119,27 +120,44 @@ needed).
 
 **Location:** `rocq/Arbitrage.v`
 
-A single self-contained file (157 lemmas, 8 theorems,
-4 corollaries, 5,568 lines, 0 Admitted, 0 axioms used
-in the proofs) that mechanizes all five theorems
-from the paper:
+A single self-contained file (13,489 lines; 5 theorems,
+432 lemmas, 13 corollaries, 1 example; 0 Admitted,
+0 axioms, 11 Parameters) that mechanizes all five
+theorems from the paper. Exactly five results are
+declared `Theorem`, and they are the paper's five:
 
 | Theorem | Rocq name | What it proves |
 |---------|-----------|----------------|
-| Thm 1 (Preservation) | `preservation` | No rewrite rule fabricates a transfer |
-| Thm 2 (Termination) | `fixpoint_terminates` | Fixpoint converges in at most 3n-2 passes |
-| Thm 3 (Soundness) | `soundness_full` | Arbitrage verdict implies Definition 5 |
-| Thm 4 (Confluence) | `confluence` | Unique normal form |
-| Thm 5 (Decidable equiv.) | `decidable_equivalence` | Word problem is decidable |
+| Thm 1 (Preservation) | `theorem_1_preservation` | Chains track walks in G; no rule fabricates or drops a transfer; the multiset is conserved |
+| Thm 2 (Termination) | `theorem_2_termination` | The kernel reaches a normal form; 3n−2 passes on fully lifted trees; well-founded under any rule order |
+| Thm 3 (Soundness) | `theorem_3_soundness` | An Arbitrage verdict yields a witness for the paper's arbitrage definition over the transaction's own transfers (`def5_witness`) |
+| Thm 4 (Uniqueness) | `theorem_4_confluence` | Unique normal form under the execution's order; balances agree under every order; local joinability up to reassociation |
+| Thm 5 (Decidability) | `theorem_5_decidable_equivalence` | Joinable iff equal normal forms; the coarser equivalence is decided by `struct_equiv_dec` |
 
-Each of the 15 rewriting rules from Table 1 (R1--R15)
-is a named constructor in the Rocq specification; R16
-(post-rewriting validation) is modeled as a predicate.
-The structural predicates (`is_burn`, `is_mint`,
-`is_singleton_router`, `is_token_contract`) are
-abstract Parameters; all proofs proceed by case
-analysis on the boolean value, making the formalization
-valid for any EVM-compatible chain.
+To check that nothing is assumed beyond the declared
+interface, append `Print Assumptions theorem_1_preservation.`
+(and likewise for the other four) and recompile: each
+lists exactly the 11 Parameters and nothing else — no
+`Admitted`, no added axiom.
+
+`rewrite_step` has 17 constructors: the 15 rules of
+Table 1, plus `RS_lift` (a fully-reduced frame's
+children become siblings of the frame) and `RS_under`
+(the congruence that lets a rule fire in a nested
+subtree). R16, post-fixpoint delta validation, is not a
+rewrite step; it is modeled by the
+`validated_arbitrage` predicate.
+
+The 11 Parameters are declared and never defined: the
+two carrier types with their decidable equalities,
+token equivalence, `is_burn`, `is_mint`,
+`is_singleton_router`, `is_token_contract`, the cost
+model `net_positive`, and the trace-order key
+`trace_key`. Nothing is assumed about them beyond their
+types, so every result holds for any realizer and the
+formalization is valid for any EVM-compatible chain.
+See `rocq/README.md` for the full structure, and
+`proofs/proofs.pdf` for the long-form proofs.
 
 ### How to verify
 
@@ -685,7 +703,8 @@ found no cyclic structure (`"arbitrage": null`).
 
 | Paper claim | How to verify | Expected result |
 |-------------|---------------|-----------------|
-| Five formal properties | `rocq compile Arbitrage.v` | Compiles with 0 errors |
+| Five formal properties | `rocq compile Arbitrage.v` | Compiles with 0 errors, 0 Admitted |
+| Nothing assumed beyond the interface | `Print Assumptions theorem_3_soundness.` | Lists exactly the 11 Parameters |
 | 469,801 confirmed arbitrages | Pipeline step 1 | `explore.txt`: confirmed = 469,801 |
 | 83.5% Eigenphi recall | Pipeline step 2 | `accuracy.txt`: 542,279 / 649,790 |
 | 81% ArbiNet overlap | Pipeline step 22 | `comparison.txt`: 81% coverage |
