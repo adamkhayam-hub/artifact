@@ -51,11 +51,11 @@
     - [kfull_*]: redex-complete kernel (O0) soundness/completeness,
       closing the R-vs-K formalization gap.
 
-    Statistics: 447 theorems/lemmas/corollaries/examples
-    (5 Theorems -- the paper's five -- 428 Lemmas,
+    Statistics: 451 theorems/lemmas/corollaries/examples
+    (5 Theorems -- the paper's five -- 432 Lemmas,
     13 Corollaries, 1 Example: the plain-swap regression
     test [plain_swap_not_def5]),
-    0 axioms, 0 Admitted, 11 Parameters.
+    13489 lines, 0 axioms, 0 Admitted, 11 Parameters.
 
     The eleven [Parameter]s are DECLARED AND NEVER DEFINED.
     They are the development's trusted interface: the two
@@ -75,9 +75,13 @@
     [is_token_equiv_well_formed] (reflexivity and symmetry of
     [token_equiv]) and [is_trace_key_wf] (injectivity of
     [trace_key]).
-    Rewriting rules: 15 constructors (R1--R15 from
-    Table 1).  R16 (post-rewriting validation) is
-    modeled by the [validated_arbitrage] predicate.
+    Rewriting rules: [rewrite_step] has 17 constructors,
+    the 15 rules R1--R15 of Table 1 plus [RS_lift] (a
+    fully-reduced frame's children become siblings of the
+    frame) and [RS_under] (the single-hole congruence that
+    lets a rule fire in a nested subtree).  R16
+    (post-rewriting validation) is modeled by the
+    [validated_arbitrage] predicate.
     Compile: opam exec -- rocq compile Arbitrage.v
 
     Author: [anonymous]
