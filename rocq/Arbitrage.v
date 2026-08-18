@@ -40,11 +40,14 @@
       sigma-CFTs.
     - [observable_confluence(_delta)]: the net-flow map is invariant
       under every reduction order (delta conservation), so the
-      verdict is independent of the order in which rules fire.
-      Structural order-independence holds modulo the canonical form
-      kappa (O3); where two orders differ structurally they still
-      agree on the conserved net-flow, which is the observable the
-      verdict reads.
+      BALANCE component the verdict reads is independent of the
+      order in which rules fire.  This is not order-independence of
+      the whole verdict: [compute_reasons] also reads cycle
+      existence and the leftover list, which are structural, so the
+      cascade's answer is defined under the deterministic kernel.
+      Local structural joinability holds modulo the canonical form
+      kappa on well-formed trees (O3); where two orders differ
+      structurally they still agree on the conserved net-flow.
     - [struct_equiv_dec]: decidable structural equivalence,
       [struct_equiv] := equal canonical form (kappa), quotienting
       parallel-bundle reordering (A||B||C = every permutation).
@@ -55,7 +58,7 @@
     (5 Theorems -- the paper's five -- 432 Lemmas,
     13 Corollaries, 1 Example: the plain-swap regression
     test [plain_swap_not_def5]),
-    13493 lines, 0 axioms, 0 Admitted, 11 Parameters.
+    13501 lines, 0 axioms, 0 Admitted, 11 Parameters.
 
     The eleven [Parameter]s are DECLARED AND NEVER DEFINED.
     They are the development's trusted interface: the two
@@ -10214,8 +10217,8 @@ Qed.
 
    Two one-step reducts of the same tree are joinable modulo
    kappa: each reduces (by R star) to trees with equal canonical
-   forms.  With termination (O4, [rewrite_step_wf]) this
-   yields global confluence modulo kappa (Newman, O5).
+   forms.  With termination (O4) this would give global confluence
+   modulo kappa (O5) if wf_rcft were preserved; that is open (O3).
 
    The critical-pair classes on the frozen relation:
      - two-leaf trees: deterministic ([leaf_pair_exclusive]);
@@ -13301,10 +13304,14 @@ Qed.
    pins the entire net-flow structure -- the signed delta at every
    (address, token) is invariant under every reduction order.  So
    any two reductions of a tree agree on the whole delta map, hence
-   on the value-level verdict, for every observer.  The system is
-   confluent with respect to conservation of funds; order-
-   independence of the answer is inherited from conservation,
-   underpinned by local confluence for the non-interfering walks.
+   on the BALANCE OBSERVABLE the verdict reads, for every observer.
+   The system is confluent with respect to conservation of funds;
+   order-independence of the balance component is inherited from
+   conservation, underpinned by local confluence for the
+   non-interfering walks.  The whole verdict is not covered:
+   [compute_reasons] also reads cycle existence and the leftover
+   list, which are structural, so the cascade's answer is defined
+   under the deterministic kernel.
    ============================================================ *)
 
 (** The net signed flow of a whole tree at [(a, tok)]: the sum of
