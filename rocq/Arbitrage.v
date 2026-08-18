@@ -55,7 +55,7 @@
     (5 Theorems -- the paper's five -- 432 Lemmas,
     13 Corollaries, 1 Example: the plain-swap regression
     test [plain_swap_not_def5]),
-    13489 lines, 0 axioms, 0 Admitted, 11 Parameters.
+    13493 lines, 0 axioms, 0 Admitted, 11 Parameters.
 
     The eleven [Parameter]s are DECLARED AND NEVER DEFINED.
     They are the development's trusted interface: the two
@@ -13360,10 +13360,14 @@ Qed.
     map is invariant: any two reductions of a tree agree on the
     signed delta at EVERY address and token.  Structural
     non-confluence of the nondeterministic system is invisible
-    through this conserved observable -- the detector's answer,
-    which reads the delta, is order-independent by conservation,
-    underpinned by O3's local confluence for the non-interfering
-    walks. *)
+    through this conserved observable, so the BALANCE the verdict
+    reads is order-independent by conservation, underpinned by
+    O3's local confluence for the non-interfering walks.  This
+    does not make the whole verdict order-independent:
+    [compute_reasons] also reads cycle existence and the leftover
+    list, which are structural and not determined by the delta,
+    so the cascade's answer is defined under the deterministic
+    kernel. *)
 Lemma observable_confluence_delta :
   forall from_ T T1 T2,
     rewrite_star from_ T T1 ->

@@ -24,7 +24,7 @@ nothing else: no `Admitted`, no added axiom.
 
 ## Overview
 
-`Arbitrage.v` is a self-contained file (13,489 lines;
+`Arbitrage.v` is a self-contained file (13,493 lines;
 5 theorems, 432 lemmas, 13 corollaries, 1 example;
 0 `Admitted`, 0 axioms, 11 `Parameter`s) that
 mechanizes the five theorems of the paper. It requires
