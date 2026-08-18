@@ -131,7 +131,7 @@ declared `Theorem`, and they are the paper's five:
 | Thm 1 (Preservation) | `theorem_1_preservation` | Chains track walks in G; no rule fabricates or drops a transfer; the multiset is conserved |
 | Thm 2 (Termination) | `theorem_2_termination` | The kernel reaches a normal form; 3n−2 passes on fully lifted trees; well-founded under any rule order |
 | Thm 3 (Soundness) | `theorem_3_soundness` | An Arbitrage verdict yields a witness for the paper's arbitrage definition over the transaction's own transfers (`def5_witness`) |
-| Thm 4 (Uniqueness) | `theorem_4_confluence` | Unique normal form under the execution's order; balances agree under every order; local joinability up to reassociation |
+| Thm 4 (Uniqueness) | `theorem_4_confluence` | Unique normal form under the deterministic kernel; balances agree under every order; local joinability up to reassociation on well-formed trees |
 | Thm 5 (Decidability) | `theorem_5_decidable_equivalence` | Joinable iff equal normal forms; the coarser equivalence is decided by `struct_equiv_dec` |
 
 To check that nothing is assumed beyond the declared
@@ -244,7 +244,7 @@ This executes 29 steps. Results appear in
 | 7-8 | Temporal + gas | Distribution plots |
 | 9 | Figures | PDFs for the paper |
 | 10-18 | Manual validation (see categories below) | 500 txs, zero false positives |
-| 19-20 | Forensic analysis of Eigenphi-only txs | 63.5% Eigenphi false positives (no canonical cycle), 27.5% cross-token routing (not arbitrages), 9.0% inner-address arbitrages (our misses) |
+| 19-20 | Forensic analysis of Eigenphi-only txs | 63.5% no cycle in normal form, 27.5% cross-token routing (not arbitrages), 9.0% inner-address arbitrages (our misses) |
 | 21-24 | ArbiNet three-way comparison | 81% overlap, gap analysis |
 | 25-27 | Cross-chain | Arbitrum (50 confirmed), BSC (88 confirmed) |
 | 28 | Master summary | All paper numbers in one file |
@@ -275,11 +275,10 @@ produces four categories of transactions:
 - **Category 4 (Eigenphi-only)**: transactions Eigenphi
   flags but our system does not classify. We sample 200
   and run our detection tool on each. All 200 receive
-  a non-arbitrage classification. The canonical forms
+  a non-arbitrage classification. The normal forms
   partition into three groups: 63.5% have no arbitrage
-  cycle in canonical form (Eigenphi labels them
-  incorrectly: simple transfers, wrap/unwrap, RWA
-  mints, yield harvests), 27.5% contain cross-token
+  cycle in normal form (simple transfers, wrap/unwrap,
+  RWA mints, yield harvests), 27.5% contain cross-token
   cycles that exit in a different token from the
   entry (not arbitrages under
   $\tau_{\mathrm{in}} =_\tau \tau_{\mathrm{out}}$
@@ -600,7 +599,7 @@ arbitrage cycles.
 - `N-1.dot` — AST after cycle connection. Complementary
   chains at the same level are merged.
 - `N.dot` (last) — final reduced form after the fixpoint
-  converges. This is the canonical form from which the
+  converges. This is the normal form from which the
   verdict is derived.
 
 ### Node types

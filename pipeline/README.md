@@ -79,7 +79,7 @@ whose blocks are available in `blockdb/`. This means:
   contain the traces for this range.
 
 The forensic percentages (63.5% no cycle in
-canonical form, 9.0% inner-address) may differ
+normal form, 9.0% inner-address) may differ
 slightly because the sample is drawn from fewer
 blocks. The methodology and the analysis logic
 are identical to the paper.
@@ -235,7 +235,7 @@ These steps implement the manual validation methodology:
 4. **Eigenphi-only** (200 txs): transactions Eigenphi
    flags but our system does not classify. What are
    we missing? Result: 63.5% have no cycle in
-   canonical form (Eigenphi false positives), 27.5%
+   normal form, 27.5%
    are cross-token routing (not arbitrages), and
    9.0% contain cycles at inner addresses (our
    fixpoint detects them but the classification

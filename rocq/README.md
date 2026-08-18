@@ -130,7 +130,7 @@ Supporting results the paper names:
 |---|---|
 | No fabricated transfers | `no_fabricated_transfers` |
 | Reported profits are input balances | `reported_deltas_are_input_deltas` |
-| A plain swap is not a Def. 5 witness | `plain_swap_not_def5` |
+| A plain swap is not an arbitrage witness | `plain_swap_not_def5` |
 | Bundle size = 1 + parallel-merge junctions | `walk_decomposition_count` |
 | Balances agree under every rule order | `observable_confluence_delta` |
 | Local joinability up to reassociation | `local_confluent_mod_kappa_holds` |
